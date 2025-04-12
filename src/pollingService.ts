@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { bot } from './telegram';
 import { getAllTrackedWalletsWithState, updateLastNotifiedSignature } from './database';
 import { getRecentTransfersForWallet, VybeTransfer } from './vybeApi';
+import { walletLog, logTransferNotification } from './logger';
 
 // Function to format a transfer for display
 function formatTransfer(transfer: VybeTransfer): string {
@@ -15,22 +16,48 @@ function formatTransfer(transfer: VybeTransfer): string {
 // Function to check for new transfers for a specific wallet
 async function checkSingleWalletActivity(db: any, walletAddress: string, users: Array<{ userId: number, lastSig: string | null, createdAt: string }>) {
     try {
+        walletLog(walletAddress, null, `Checking for new transfers`, { userCount: users.length });
+
         const transfers = await getRecentTransfersForWallet(walletAddress);
-        if (!transfers || transfers.length === 0) return;
+        if (!transfers || transfers.length === 0) {
+            walletLog(walletAddress, null, `No transfers found`);
+            return;
+        }
+
+        walletLog(walletAddress, null, `Found ${transfers.length} transfers`, {
+            newest: {
+                signature: transfers[0].signature,
+                time: new Date(transfers[0].blockTime * 1000).toISOString()
+            },
+            oldest: {
+                signature: transfers[transfers.length - 1].signature,
+                time: new Date(transfers[transfers.length - 1].blockTime * 1000).toISOString()
+            }
+        });
 
         // Create a map to store new transfers per user
         const userNotifications = new Map<number, VybeTransfer[]>();
+        // Track skipped transfers and reasons for debugging
+        const skippedTransfers = new Map<number, Array<VybeTransfer & { reason: string }>>();
 
         // Process transfers from newest to oldest
         for (const transfer of transfers) {
             // Check which users tracking this wallet need to see this transfer
             for (const user of users) {
+                // Initialize skipped transfers array if not exists
+                if (!skippedTransfers.has(user.userId)) {
+                    skippedTransfers.set(user.userId, []);
+                }
+
                 // Convert created_at string to a timestamp for comparison
                 const createdAtTimestamp = new Date(user.createdAt).getTime() / 1000;
 
                 // Only notify about transfers that happened AFTER the wallet was tracked
                 if (transfer.blockTime <= createdAtTimestamp) {
-                    console.log(`Skipping transfer ${transfer.signature} for user ${user.userId} as it occurred before tracking started`);
+                    skippedTransfers.get(user.userId)!.push({
+                        ...transfer,
+                        reason: 'Transfer occurred before wallet was tracked'
+                    });
                     continue;
                 }
 
@@ -50,6 +77,10 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     }
                 } else {
                     // We've hit the transaction the user was last notified of
+                    skippedTransfers.get(user.userId)!.push({
+                        ...transfer,
+                        reason: 'Already notified about this transfer'
+                    });
                     // No need to process older transactions for this user
                     break;
                 }
@@ -59,6 +90,10 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
         // Send grouped notifications for each user
         for (const [userId, newTransfers] of userNotifications) {
             if (newTransfers.length > 0) {
+                walletLog(walletAddress, userId, `Preparing to send notification for ${newTransfers.length} transfers`, {
+                    signatures: newTransfers.map(t => t.signature)
+                });
+
                 // Format the summary message
                 let message = `🔔 New transfers detected for wallet \`${walletAddress}\`:\n\n`;
 
@@ -84,10 +119,21 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     walletAddress,
                     newTransfers[0].signature
                 );
+
+                // Log the notification
+                logTransferNotification(
+                    walletAddress,
+                    userId,
+                    newTransfers,
+                    skippedTransfers.get(userId)
+                );
+            } else {
+                walletLog(walletAddress, userId, 'No new transfers to notify');
             }
         }
     } catch (error) {
         console.error(`Error checking wallet ${walletAddress}:`, error);
+        walletLog(walletAddress, null, 'Error checking wallet activity', { error: String(error) });
     }
 }
 
@@ -96,6 +142,7 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
     try {
         // Get all tracked wallets
         const trackedWallets = await getAllTrackedWalletsWithState(db);
+        console.log(`Checking ${trackedWallets.length} tracked wallets...`);
 
         // Group wallets by address for efficiency
         const walletsByAddress = new Map<string, Array<{ userId: number, lastSig: string | null, createdAt: string }>>();
@@ -143,18 +190,26 @@ export async function startPollingService(db: any) {
             console.log('No wallets are currently being tracked.');
         } else {
             // Group wallets by user for better readability
-            const walletsByUser = new Map<number, string[]>();
+            const walletsByUser = new Map<number, Array<{ address: string, createdAt: string }>>();
             for (const wallet of trackedWallets) {
                 if (!walletsByUser.has(wallet.user_id)) {
                     walletsByUser.set(wallet.user_id, []);
                 }
-                walletsByUser.get(wallet.user_id)!.push(wallet.wallet_address);
+                walletsByUser.get(wallet.user_id)!.push({
+                    address: wallet.wallet_address,
+                    createdAt: wallet.created_at
+                });
             }
 
             // Log each user's tracked wallets
-            for (const [userId, addresses] of walletsByUser) {
+            for (const [userId, wallets] of walletsByUser) {
                 console.log(`\nUser ${userId} is tracking:`);
-                addresses.forEach(addr => console.log(`- ${addr}`));
+                wallets.forEach(wallet => {
+                    console.log(`- ${wallet.address} (tracked since: ${wallet.createdAt})`);
+                    walletLog(wallet.address, userId, 'Tracking resumed on bot startup', {
+                        tracked_since: wallet.createdAt
+                    });
+                });
             }
         }
         console.log('\n');

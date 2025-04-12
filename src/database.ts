@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import { walletLog } from './logger';
 
 // Initialize the database and create necessary tables
 export async function initializeDatabase() {
@@ -50,6 +51,12 @@ export async function addTrackedWallet(db: any, userId: number, walletAddress: s
          ON CONFLICT(user_id, wallet_address) DO NOTHING`,
         [userId, walletAddress]
     );
+
+    // Log that the wallet is now being tracked
+    walletLog(walletAddress, userId, 'Wallet tracking started', {
+        tracked_at: new Date().toISOString(),
+        last_notified_tx_signature: null
+    });
 }
 
 // Get all tracked wallets with their last notified transaction signature
