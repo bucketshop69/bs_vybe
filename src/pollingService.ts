@@ -13,19 +13,27 @@ function formatTransfer(transfer: VybeTransfer): string {
 }
 
 // Function to check for new transfers for a specific wallet
-async function checkSingleWalletActivity(db: any, walletAddress: string, users: Array<{ userId: number, lastSig: string | null }>) {
+async function checkSingleWalletActivity(db: any, walletAddress: string, users: Array<{ userId: number, lastSig: string | null, createdAt: string }>) {
     try {
         const transfers = await getRecentTransfersForWallet(walletAddress);
         if (!transfers || transfers.length === 0) return;
 
         // Create a map to store new transfers per user
-        const userNotifications = new Map<number, any[]>();
+        const userNotifications = new Map<number, VybeTransfer[]>();
 
         // Process transfers from newest to oldest
         for (const transfer of transfers) {
-            // Skip if this is a spam transfer
             // Check which users tracking this wallet need to see this transfer
             for (const user of users) {
+                // Convert created_at string to a timestamp for comparison
+                const createdAtTimestamp = new Date(user.createdAt).getTime() / 1000;
+
+                // Only notify about transfers that happened AFTER the wallet was tracked
+                if (transfer.blockTime <= createdAtTimestamp) {
+                    console.log(`Skipping transfer ${transfer.signature} for user ${user.userId} as it occurred before tracking started`);
+                    continue;
+                }
+
                 // If this transfer is newer than the user's last known signature
                 if (transfer.signature !== user.lastSig) {
                     // Check if this user has already processed this transfer in this cycle
@@ -90,7 +98,7 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
         const trackedWallets = await getAllTrackedWalletsWithState(db);
 
         // Group wallets by address for efficiency
-        const walletsByAddress = new Map<string, Array<{ userId: number, lastSig: string | null }>>();
+        const walletsByAddress = new Map<string, Array<{ userId: number, lastSig: string | null, createdAt: string }>>();
 
         for (const wallet of trackedWallets) {
             if (!walletsByAddress.has(wallet.wallet_address)) {
@@ -98,7 +106,8 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
             }
             walletsByAddress.get(wallet.wallet_address)!.push({
                 userId: wallet.user_id,
-                lastSig: wallet.last_notified_tx_signature
+                lastSig: wallet.last_notified_tx_signature,
+                createdAt: wallet.created_at
             });
         }
 

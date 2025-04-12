@@ -55,7 +55,7 @@ export async function addTrackedWallet(db: any, userId: number, walletAddress: s
 // Get all tracked wallets with their last notified transaction signature
 export async function getAllTrackedWalletsWithState(db: any) {
     return await db.all(`
-        SELECT user_id, wallet_address, last_notified_tx_signature
+        SELECT user_id, wallet_address, last_notified_tx_signature, created_at
         FROM tracked_wallets
     `);
 }
