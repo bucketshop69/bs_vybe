@@ -28,6 +28,91 @@ interface RankedDexData {
     percentChange24h: number | null;
 }
 
+// Interface for token transfers
+export interface VybeTransfer {
+    signature: string;
+    blockTime: number;
+    senderAddress: string;
+    receiverAddress: string;
+    amount: number;
+    tokenDetails: TokenDetails | string;
+}
+
+interface VybeTransferResponse {
+    transfers: Array<{
+        signature: string;
+        blockTime: number;
+        senderAddress: string;
+        receiverAddress: string;
+        amount: number;
+        calculatedAmount: string;
+        mintAddress: string;
+        valueUsd: string;
+    }>;
+}
+
+interface TokenInstructionData {
+    callingInstructions: number[];
+    ixName: string;
+    callingProgram: string;
+    programName: string;
+}
+
+interface TokenInstructionResponse {
+    data: TokenInstructionData[];
+}
+
+interface TokenDetails {
+    symbol: string;
+    name: string;
+    mintAddress: string;
+    price: number;
+    price1d: number;
+    price7d: number;
+    decimal: number;
+    logoUrl: string;
+    category: string;
+    subcategory: string | null;
+    verified: boolean;
+    updateTime: number;
+    currentSupply: number;
+    marketCap: number;
+    tokenAmountVolume24h: number;
+    usdValueVolume24h: number;
+}
+
+
+/**
+ * Gets the token details for a given mint address
+ * @param mintAddress The token's mint address
+ * @returns Promise containing the token details or mint address on error
+ */
+async function getTokenDetails(mintAddress: string): Promise<TokenDetails | string> {
+    const apiKey = process.env.VYBE_KEY;
+    if (!apiKey) {
+        console.error('VYBE_KEY is not set in environment variables');
+        return mintAddress;
+    }
+
+    try {
+        const response = await axios.get<TokenDetails>(
+            `https://api.vybenetwork.xyz/token/${mintAddress}`,
+            {
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-KEY': apiKey
+                }
+            }
+        );
+
+        // Return the token details - API returns the details directly in the data property
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching token details for ${mintAddress}:`, error);
+        return mintAddress;
+    }
+}
+
 /**
  * Fetches the last two days of DAU data for a specific program ID
  * @param programId The Solana program ID to fetch data for
@@ -230,6 +315,67 @@ export async function testDigestFormatting() {
     const message = formatDigestMessage(rankedData);
     console.log('\nFormatted Digest Message:');
     console.log(message);
+}
+
+/**
+ * Fetches recent token transfers for a specific wallet address
+ * @param walletAddress The Solana wallet address to fetch transfers for
+ * @param limit Maximum number of transfers to return (default: 5)
+ * @returns Promise containing an array of transfers or null if the request fails
+ */
+export async function getRecentTransfersForWallet(
+    walletAddress: string,
+    limit: number = 5
+): Promise<VybeTransfer[] | null> {
+    const apiKey = process.env.VYBE_KEY;
+
+    if (!apiKey) {
+        console.error('VYBE_KEY is not set in environment variables');
+        return null;
+    }
+
+    try {
+        const response = await axios.get<VybeTransferResponse>(
+            'https://api.vybenetwork.xyz/token/transfers',
+            {
+                params: {
+                    feePayer: walletAddress,
+                    limit,
+                    sortByDesc: 'blockTime',
+                    senderAddress: walletAddress,
+                },
+                headers: {
+                    'X-API-KEY': apiKey
+                }
+            }
+        );
+
+        if (!response.data?.transfers || !Array.isArray(response.data.transfers)) {
+            console.error('Invalid response format for wallet transfers:', response.data);
+            return null;
+        }
+
+
+        // Create an array of promises that resolve to VybeTransfer objects with awaited token details
+        const transferPromises = response.data.transfers.map(async (transfer) => {
+            const tokenDetails = await getTokenDetails(transfer.mintAddress);
+            return {
+                signature: transfer.signature,
+                blockTime: transfer.blockTime,
+                senderAddress: transfer.senderAddress,
+                receiverAddress: transfer.receiverAddress,
+                amount: transfer.amount,
+                tokenDetails
+            };
+        });
+        const transfers = await Promise.all(transferPromises);
+        console.log('API Response:', JSON.stringify(transfers, null, 2));
+        // Await all the promises to resolve
+        return transfers;
+    } catch (error) {
+        console.error(`Error fetching transfers for wallet ${walletAddress}:`, error);
+        return null;
+    }
 }
 
 // Run tests if this file is executed directly

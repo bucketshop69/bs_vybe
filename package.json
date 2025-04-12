@@ -31,10 +31,15 @@
   "dependencies": {
     "@types/axios": "^0.9.36",
     "@types/express": "^5.0.1",
+    "@types/node-cron": "^3.0.11",
     "@types/node-telegram-bot-api": "^0.64.8",
+    "@types/sqlite3": "^3.1.11",
     "axios": "^1.8.4",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "node-telegram-bot-api": "^0.66.0"
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
