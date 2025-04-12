@@ -14,7 +14,13 @@ function formatTransfer(transfer: VybeTransfer): string {
 }
 
 // Function to check for new transfers for a specific wallet
-async function checkSingleWalletActivity(db: any, walletAddress: string, users: Array<{ userId: number, lastSig: string | null, createdAt: string }>) {
+async function checkSingleWalletActivity(db: any, walletAddress: string, users: Array<{
+    userId: number,
+    lastSig: string | null,
+    lastBlockTime: number | null,
+    trackingStartedAt: number | null,
+    createdAt: string
+}>) {
     try {
         walletLog(walletAddress, null, `Checking for new transfers`, { userCount: users.length });
 
@@ -27,10 +33,12 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
         walletLog(walletAddress, null, `Found ${transfers.length} transfers`, {
             newest: {
                 signature: transfers[0].signature,
+                blockTime: transfers[0].blockTime,
                 time: new Date(transfers[0].blockTime * 1000).toISOString()
             },
             oldest: {
                 signature: transfers[transfers.length - 1].signature,
+                blockTime: transfers[transfers.length - 1].blockTime,
                 time: new Date(transfers[transfers.length - 1].blockTime * 1000).toISOString()
             }
         });
@@ -49,11 +57,21 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     skippedTransfers.set(user.userId, []);
                 }
 
-                // Convert created_at string to a timestamp for comparison
-                const createdAtTimestamp = new Date(user.createdAt).getTime() / 1000;
+                // Get the tracking start time (use different methods depending on what's available)
+                const trackingStartTime = user.trackingStartedAt ||
+                    (user.createdAt ? Math.floor(new Date(user.createdAt).getTime() / 1000) : null);
+
+                // Skip if we don't have a valid start time
+                if (!trackingStartTime) {
+                    skippedTransfers.get(user.userId)!.push({
+                        ...transfer,
+                        reason: 'Cannot determine when tracking started'
+                    });
+                    continue;
+                }
 
                 // Only notify about transfers that happened AFTER the wallet was tracked
-                if (transfer.blockTime <= createdAtTimestamp) {
+                if (transfer.blockTime <= trackingStartTime) {
                     skippedTransfers.get(user.userId)!.push({
                         ...transfer,
                         reason: 'Transfer occurred before wallet was tracked'
@@ -61,8 +79,17 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     continue;
                 }
 
+                // Skip if we've already processed this block time
+                if (user.lastBlockTime && transfer.blockTime <= user.lastBlockTime) {
+                    skippedTransfers.get(user.userId)!.push({
+                        ...transfer,
+                        reason: 'Already processed transactions up to this block time'
+                    });
+                    continue;
+                }
+
                 // If this transfer is newer than the user's last known signature
-                if (transfer.signature !== user.lastSig) {
+                if (!user.lastSig || transfer.signature !== user.lastSig) {
                     // Check if this user has already processed this transfer in this cycle
                     const alreadyAdded = userNotifications.get(user.userId)?.
                         some(t => t.signature === transfer.signature);
@@ -117,7 +144,8 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     db,
                     userId,
                     walletAddress,
-                    newTransfers[0].signature
+                    newTransfers[0].signature,
+                    newTransfers[0].blockTime
                 );
 
                 // Log the notification
@@ -145,7 +173,13 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
         console.log(`Checking ${trackedWallets.length} tracked wallets...`);
 
         // Group wallets by address for efficiency
-        const walletsByAddress = new Map<string, Array<{ userId: number, lastSig: string | null, createdAt: string }>>();
+        const walletsByAddress = new Map<string, Array<{
+            userId: number,
+            lastSig: string | null,
+            lastBlockTime: number | null,
+            trackingStartedAt: number | null,
+            createdAt: string
+        }>>();
 
         for (const wallet of trackedWallets) {
             if (!walletsByAddress.has(wallet.wallet_address)) {
@@ -154,6 +188,8 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
             walletsByAddress.get(wallet.wallet_address)!.push({
                 userId: wallet.user_id,
                 lastSig: wallet.last_notified_tx_signature,
+                lastBlockTime: wallet.last_processed_block_time,
+                trackingStartedAt: wallet.tracking_started_at,
                 createdAt: wallet.created_at
             });
         }

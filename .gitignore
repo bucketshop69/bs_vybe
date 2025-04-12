@@ -140,3 +140,10 @@ dist
 vybe_bot.db
 .env
 logs/
+.cursor/rules/bot-rule.mdc
+
+# Cursor specific
+.cursor/
+.cursor/rules/env-rule.mdc
+.cursor/rules/bot-rule.mdc
+

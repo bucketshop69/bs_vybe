@@ -16,9 +16,19 @@ if (!fs.existsSync(LOGS_DIR)) {
  */
 export function walletLog(walletAddress: string, userId: number | null, message: string, data?: any) {
     try {
-        const timestamp = new Date().toISOString();
+        // Use both ISO string (for human readability) and Unix timestamp (for consistency)
+        const timestamp = new Date();
+        const isoTimestamp = timestamp.toISOString();
+        const unixTimestamp = Math.floor(timestamp.getTime() / 1000);
+
+        // Add Unix timestamp to the data if provided
+        if (data) {
+            data._timestamp_unix = unixTimestamp;
+        }
+
         const logEntry = {
-            timestamp,
+            timestamp: isoTimestamp,
+            timestamp_unix: unixTimestamp,
             userId,
             message,
             data
@@ -29,7 +39,7 @@ export function walletLog(walletAddress: string, userId: number | null, message:
         const logPath = path.join(LOGS_DIR, walletFileName);
 
         // Append to the log file
-        const logString = `[${timestamp}] ${userId ? `User: ${userId} ` : ''}${message}${data ? `\nData: ${JSON.stringify(data, null, 2)}` : ''}\n\n`;
+        const logString = `[${isoTimestamp}] ${userId ? `User: ${userId} ` : ''}${message}${data ? `\nData: ${JSON.stringify(data, null, 2)}` : ''}\n\n`;
         fs.appendFileSync(logPath, logString);
 
         // Also print to console for visibility
@@ -60,7 +70,8 @@ export function logTransferNotification(
         {
             notifiedTransfers: transfers.map(t => ({
                 signature: t.signature,
-                time: new Date(t.blockTime * 1000).toISOString(),
+                blockTime: t.blockTime, // Include the raw Unix timestamp
+                time: new Date(t.blockTime * 1000).toISOString(), // Keep ISO for readability
                 amount: t.amount
             })),
             skippedCount: skippedTransfers?.length || 0
@@ -75,7 +86,8 @@ export function logTransferNotification(
             `Skipped ${skippedTransfers.length} transfers`,
             skippedTransfers.map(t => ({
                 signature: t.signature,
-                time: new Date(t.blockTime * 1000).toISOString(),
+                blockTime: t.blockTime, // Include the raw Unix timestamp
+                time: new Date(t.blockTime * 1000).toISOString(), // Keep ISO for readability
                 reason: t.reason
             }))
         );
