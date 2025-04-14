@@ -1,6 +1,7 @@
 import { Worker } from 'worker_threads';
 import path from 'path';
 import { EventEmitter } from 'events';
+import fs from 'fs';
 
 // Worker types
 export enum WorkerType {
@@ -44,6 +45,14 @@ export class WorkerManager extends EventEmitter {
     }
 
     /**
+     * Get the database connection
+     * For use by methods handling DB requests from workers
+     */
+    public getDatabase() {
+        return this.db;
+    }
+
+    /**
      * Start a worker thread
      * @param type Type of worker to start
      * @returns Promise that resolves when worker is ready
@@ -51,9 +60,42 @@ export class WorkerManager extends EventEmitter {
     public async startWorker(type: WorkerType): Promise<Worker> {
         // Convert worker type to filename
         const workerFile = this.getWorkerFilename(type);
-        const workerPath = path.resolve(__dirname, 'workers', workerFile);
+
+        // Try multiple potential locations for the worker file
+        const potentialPaths = [
+            // In the same directory as the manager (dist/workers/*.js)
+            path.resolve(__dirname, 'workers', workerFile),
+
+            // One directory up from current directory (src/workers/*.js)
+            path.resolve(__dirname, '..', 'src', 'workers', workerFile),
+
+            // Direct path from project root
+            path.resolve(process.cwd(), 'dist', 'workers', workerFile),
+
+            // Development path from project root
+            path.resolve(process.cwd(), 'src', 'workers', workerFile)
+        ];
+
+        // Find the first path that exists
+        let workerPath = '';
+        for (const path of potentialPaths) {
+            try {
+                if (fs.existsSync(path)) {
+                    workerPath = path;
+                    break;
+                }
+            } catch (error) {
+                // Ignore errors and try next path
+            }
+        }
+
+        if (!workerPath) {
+            // If no existing path found, default to the first one
+            workerPath = potentialPaths[0];
+        }
 
         console.log(`Starting ${type} worker...`);
+        console.log(`Worker path: ${workerPath}`);
 
         return new Promise((resolve, reject) => {
             try {
@@ -133,6 +175,12 @@ export class WorkerManager extends EventEmitter {
      * Handle messages from workers
      */
     private handleWorkerMessage(type: WorkerType, message: any): void {
+        // Handle DB requests from workers
+        if (message.type === 'DB_REQUEST' && message.operation) {
+            this.handleDatabaseRequest(type, message);
+            return;
+        }
+
         // Check if worker is ready
         if (message.type === 'WORKER_READY') {
             console.log(`${type} worker is ready`);
@@ -150,6 +198,57 @@ export class WorkerManager extends EventEmitter {
 
         // Handle other message types
         this.emit(`${type}_message`, message);
+    }
+
+    /**
+     * Handle database requests from workers
+     */
+    private async handleDatabaseRequest(type: WorkerType, request: any): Promise<void> {
+        const { requestId, operation, params } = request;
+        const workerState = this.workers.get(type);
+
+        if (!workerState) {
+            console.error(`Worker ${type} not found for DB request`);
+            return;
+        }
+
+        try {
+            let result;
+
+            // Execute the requested database operation
+            switch (operation) {
+                case 'all':
+                    result = await this.db.all(...params);
+                    break;
+
+                case 'get':
+                    result = await this.db.get(...params);
+                    break;
+
+                case 'run':
+                    result = await this.db.run(...params);
+                    break;
+
+                default:
+                    throw new Error(`Unknown database operation: ${operation}`);
+            }
+
+            // Send the result back to the worker
+            workerState.worker.postMessage({
+                type: 'DB_RESPONSE',
+                requestId,
+                result,
+                error: null
+            });
+        } catch (error: any) {
+            // Send error back to worker
+            workerState.worker.postMessage({
+                type: 'DB_RESPONSE',
+                requestId,
+                result: null,
+                error: error.message
+            });
+        }
     }
 
     /**
@@ -180,6 +279,108 @@ export class WorkerManager extends EventEmitter {
         }
 
         workerState.worker.postMessage(message);
+    }
+
+    /**
+     * Setup the Telegram Bot
+     */
+    public async setupTelegramBot(): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.TELEGRAM,
+            { type: 'SETUP_BOT' },  // Don't send DB directly
+            'BOT_SETUP_COMPLETE'
+        ).then(() => { });
+    }
+
+    /**
+     * Initialize the Token Price Service
+     */
+    public async initializeTokenPrices(): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.TOKEN_PRICE,
+            { type: 'INITIALIZE' },
+            'INITIALIZED'
+        ).then(() => { });
+    }
+
+    /**
+     * Start the Token Price Service
+     */
+    public async startTokenPriceService(): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.TOKEN_PRICE,
+            { type: 'START_SERVICE' },
+            'SERVICE_STARTED'
+        ).then(() => { });
+    }
+
+    /**
+     * Setup price update listeners for the token price worker
+     */
+    public setupPriceUpdateListener(callback: (data: any) => void): void {
+        this.on(`${WorkerType.TOKEN_PRICE}_message`, (message: any) => {
+            if (message.type === 'PRICE_UPDATE') {
+                callback(message.data);
+            }
+        });
+    }
+
+    /**
+     * Setup price alert listeners for the token price worker
+     */
+    public setupPriceAlertListener(callback: (alertType: string, token: any, data: any) => void): void {
+        this.on(`${WorkerType.TOKEN_PRICE}_message`, (message: any) => {
+            if (message.type === 'PRICE_ALERT') {
+                callback(message.alertType, message.token, message.data);
+            }
+        });
+    }
+
+    /**
+     * Start wallet activity polling
+     */
+    public async startWalletPolling(): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.WALLET_ACTIVITY,
+            { type: 'START_POLLING' },
+            'POLLING_STARTED'
+        ).then(() => { });
+    }
+
+    /**
+     * Stop wallet activity polling
+     */
+    public async stopWalletPolling(): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.WALLET_ACTIVITY,
+            { type: 'STOP_POLLING' },
+            'POLLING_STOPPED'
+        ).then(() => { });
+    }
+
+    /**
+     * Check a specific wallet for activity
+     */
+    public async checkWalletActivity(walletAddress: string): Promise<void> {
+        return this.sendAndWaitForResponse(
+            WorkerType.WALLET_ACTIVITY,
+            {
+                type: 'CHECK_WALLET',
+                walletAddress
+            },
+            'WALLET_CHECKED'
+        ).then(() => { });
+    }
+
+    /**
+     * Setup wallet activity listener
+     */
+    public setupWalletActivityListener(callback: (walletAddress: string, activity: any) => void): void {
+        this.on(`${WorkerType.WALLET_ACTIVITY}_message`, (message: any) => {
+            if (message.type === 'WALLET_ACTIVITY') {
+                callback(message.walletAddress, message.activity);
+            }
+        });
     }
 
     /**
@@ -245,11 +446,7 @@ export class WorkerManager extends EventEmitter {
 
             // Init worker based on type
             if (type === WorkerType.TELEGRAM) {
-                await this.sendAndWaitForResponse(
-                    type,
-                    { type: 'SETUP_BOT', data: { db: this.db } },
-                    'BOT_SETUP_COMPLETE'
-                );
+                await this.setupTelegramBot();
             }
             // Add other worker type initializations as needed
 

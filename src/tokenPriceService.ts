@@ -93,6 +93,17 @@ export type PriceAlertCallback = (
 // Global event handler
 let alertCallback: PriceAlertCallback | null = null;
 
+// External price update callback
+export type PriceUpdateCallback = (
+    token: TokenPrice,
+    changeData: {
+        percentChange: number;
+        previousPrice: number;
+    }
+) => void;
+
+let priceUpdateCallback: PriceUpdateCallback | null = null;
+
 /**
  * Register a callback function to handle price alerts
  * @param callback The function to call when price alerts are triggered
@@ -100,6 +111,15 @@ let alertCallback: PriceAlertCallback | null = null;
 export function registerAlertCallback(callback: PriceAlertCallback): void {
     alertCallback = callback;
     console.log('Alert callback registered');
+}
+
+/**
+ * Register a callback function to handle price updates
+ * @param callback The function to call when prices are updated
+ */
+export function registerPriceUpdateCallback(callback: PriceUpdateCallback): void {
+    priceUpdateCallback = callback;
+    console.log('Price update callback registered');
 }
 
 /**
@@ -268,7 +288,7 @@ function detectRapidPriceMovement(token: TokenPrice): boolean {
  * Process token price update
  * @param db Database connection
  * @param token Current token data
- * @param previousPrice Previous token price (optional)
+ * @param previousPrices Previous prices for all tokens
  */
 async function processTokenUpdate(
     db: any,
@@ -276,53 +296,56 @@ async function processTokenUpdate(
     previousPrices: { [key: string]: number } = {}
 ): Promise<void> {
     try {
-        // Get previous price if available
-        const previousPrice = previousPrices[token.mint_address] || 0;
+        // Get previous price
+        const prevPrice = previousPrices[token.mint_address] || 0;
 
-        // Update token in cache
-        await initializeTokenPriceCache(db, token);
+        // Store current price data 
+        addPriceHistoryPoint(token.mint_address, token.current_price, Math.floor(Date.now() / 1000));
 
-        // Add to price history (in-memory)
-        addPriceHistoryPoint(token.mint_address, token.current_price, token.last_update_time);
+        // Skip alert processing if we don't have a previous price
+        if (prevPrice <= 0) {
+            return;
+        }
 
-        // Check for specific price targets
-        await checkPriceTargets(db, token, previousPrice);
+        // Calculate percentage change
+        const percentChange = calculatePriceChangePercent(token.current_price, prevPrice);
 
-        // Check for rapid price movements
-        const hasRapidMovement = detectRapidPriceMovement(token);
+        // Call the price update callback if registered
+        if (priceUpdateCallback) {
+            priceUpdateCallback(token, {
+                percentChange,
+                previousPrice: prevPrice
+            });
+        }
 
-        // If we have a previous price, check for significant general changes
-        if (previousPrice > 0 && previousPrice !== token.current_price) {
-            const percentChange = calculatePriceChangePercent(token.current_price, previousPrice);
+        // Check for target price alerts first
+        await checkPriceTargets(db, token, prevPrice);
 
-            // If the change exceeds our threshold, potentially send alerts
-            if (Math.abs(percentChange) >= PRICE_ALERT_CONFIG.generalAlertThresholdPercent || hasRapidMovement) {
-                // Get subscribers for this token to be used by alert processing later
-                const subscribers = await getTokenSubscribers(db, token.mint_address);
+        // Check if change exceeds threshold for general alerts
+        const absChange = Math.abs(percentChange);
+        if (absChange >= PRICE_ALERT_CONFIG.generalAlertThresholdPercent) {
+            // Get all users subscribed to this token
+            const subscribers = await getTokenSubscribers(db, token.mint_address);
 
-                if (subscribers.length > 0) {
-                    const changeType = hasRapidMovement ? 'rapid movement' : 'significant change';
+            if (subscribers.length > 0) {
+                console.log(
+                    `🚨 Significant price movement for ${token.symbol}: ` +
+                    `${percentChange.toFixed(2)}% change to $${token.current_price.toFixed(4)}, ` +
+                    `notifying ${subscribers.length} subscribers`
+                );
 
-                    console.log(
-                        `🔔 ${changeType} detected for ${token.symbol}: ` +
-                        `${previousPrice.toFixed(4)} → ${token.current_price.toFixed(4)} ` +
-                        `(${percentChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%), ` +
-                        `${subscribers.length} subscribers`
-                    );
-
-                    // Notify through callback
-                    if (alertCallback) {
-                        await alertCallback('general', token, {
-                            percentChange,
-                            previousPrice,
-                            userIds: subscribers
-                        });
-                    }
+                // Notify through callback
+                if (alertCallback) {
+                    await alertCallback('general', token, {
+                        percentChange,
+                        previousPrice: prevPrice,
+                        userIds: subscribers
+                    });
                 }
             }
         }
     } catch (error) {
-        console.error(`Error processing token update for ${token.mint_address}:`, error);
+        console.error(`Error processing update for ${token.symbol}:`, error);
     }
 }
 

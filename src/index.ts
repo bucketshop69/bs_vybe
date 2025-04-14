@@ -23,24 +23,57 @@ async function startApp() {
         console.log('📈 Wallet activity tracking is active');
     });
 
-    // Start the Telegram bot worker first (for demonstration)
-    console.log('Starting Telegram bot worker...');
-    await workerManager.startWorker(WorkerType.TELEGRAM);
+    try {
+        // Start the Telegram bot worker
+        console.log('Starting Telegram bot worker...');
+        await workerManager.startWorker(WorkerType.TELEGRAM);
 
-    // Initialize the Telegram bot
-    console.log('Setting up Telegram bot...');
-    await workerManager.sendAndWaitForResponse(
-        WorkerType.TELEGRAM,
-        { type: 'SETUP_BOT', data: { db } },
-        'BOT_SETUP_COMPLETE'
-    );
+        // Initialize the Telegram bot without passing DB directly
+        console.log('Setting up Telegram bot...');
+        await workerManager.setupTelegramBot();
 
-    // Once we have more workers implemented, we would start them here:
-    // await workerManager.startWorker(WorkerType.TOKEN_PRICE);
-    // await workerManager.startWorker(WorkerType.WALLET_ACTIVITY);
-    // await workerManager.startWorker(WorkerType.ALERT_PROCESSING);
+        // Start the Token Price worker
+        console.log('Starting Token Price worker...');
+        await workerManager.startWorker(WorkerType.TOKEN_PRICE);
 
-    console.log('All workers started successfully');
+        // Initialize token prices
+        console.log('Initializing token prices...');
+        await workerManager.initializeTokenPrices();
+
+        // Start the token price service
+        console.log('Starting token price service...');
+        await workerManager.startTokenPriceService();
+
+        // Set up price update and alert listeners
+        workerManager.setupPriceUpdateListener((data) => {
+            console.log('Price update received:', data);
+        });
+
+        workerManager.setupPriceAlertListener((alertType, token, data) => {
+            console.log(`Price alert (${alertType}) received for ${token.symbol}:`, data);
+        });
+
+        // Start the Wallet Activity worker
+        console.log('Starting Wallet Activity worker...');
+        await workerManager.startWorker(WorkerType.WALLET_ACTIVITY);
+
+        // Start wallet activity polling
+        console.log('Starting wallet activity polling...');
+        await workerManager.startWalletPolling();
+
+        // Set up wallet activity listener
+        workerManager.setupWalletActivityListener((walletAddress, activity) => {
+            console.log(`Wallet activity detected for ${walletAddress}:`, activity);
+        });
+
+        // Once we have more workers implemented, we would start them here:
+        // await workerManager.startWorker(WorkerType.ALERT_PROCESSING);
+
+        console.log('All workers started successfully');
+    } catch (error) {
+        console.error('Error starting workers:', error);
+        process.exit(1);
+    }
 
     // Graceful shutdown handler
     process.on('SIGINT', async () => {
