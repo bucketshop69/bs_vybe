@@ -37,3 +37,24 @@ export const DEX_PROGRAMS: ProgramConfig[] = [
         name: 'Orca Whirlpool'
     }
 ];
+
+// Token tracking configuration - mint addresses of tokens to track
+export const TRACKED_TOKENS = [
+    '11111111111111111111111111111111',       // SOL
+    '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+    'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', // JUP
+    'LAYER4xPpTCb3QL8S9u41EAhAX7mhBn8Q6xMTwY2Yzc',
+    'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // BONK
+    '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+    '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',
+    'KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS'
+];
+
+// Price alert configuration
+export const PRICE_ALERT_CONFIG = {
+    pollingIntervalMs: 60 * 1000,           // 1 minute in milliseconds
+    generalAlertThresholdPercent: 3,        // 3% change triggers general alert
+    maxAlertsPerUser: 5,                    // Maximum 5 alerts per user
+    tooCloseThresholdPercent: 2,            // Target within 2% of current price is too close
+    tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
+};

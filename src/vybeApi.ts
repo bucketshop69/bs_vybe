@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { DEX_PROGRAMS } from './config';
+import { DEX_PROGRAMS, TRACKED_TOKENS } from './config';
+import { TokenPrice } from './database';
 
 // Load environment variables
 dotenv.config();
@@ -62,7 +63,8 @@ interface TokenInstructionResponse {
     data: TokenInstructionData[];
 }
 
-interface TokenDetails {
+// Export TokenDetails interface for use in other files
+export interface TokenDetails {
     symbol: string;
     name: string;
     mintAddress: string;
@@ -81,17 +83,59 @@ interface TokenDetails {
     usdValueVolume24h: number;
 }
 
+// Token API rate limiting configuration
+const TOKEN_API_RATE_LIMIT = {
+    maxRequestsPerMinute: 60,
+    requestCount: 0,
+    resetTime: Date.now() + 60000,
+};
+
+// Reset the rate limit counter every minute
+setInterval(() => {
+    TOKEN_API_RATE_LIMIT.requestCount = 0;
+    TOKEN_API_RATE_LIMIT.resetTime = Date.now() + 60000;
+}, 60000);
+
+// Check if we're within rate limits
+function checkRateLimit(): boolean {
+    // Reset counter if we're in a new minute
+    if (Date.now() > TOKEN_API_RATE_LIMIT.resetTime) {
+        TOKEN_API_RATE_LIMIT.requestCount = 0;
+        TOKEN_API_RATE_LIMIT.resetTime = Date.now() + 60000;
+    }
+
+    // Check if we've exceeded our limit
+    if (TOKEN_API_RATE_LIMIT.requestCount >= TOKEN_API_RATE_LIMIT.maxRequestsPerMinute) {
+        return false;
+    }
+
+    // Increment the counter and allow the request
+    TOKEN_API_RATE_LIMIT.requestCount++;
+    return true;
+}
+
+// Calculate wait time if rate limited
+function getRateLimitWaitTime(): number {
+    return TOKEN_API_RATE_LIMIT.resetTime - Date.now();
+}
 
 /**
  * Gets the token details for a given mint address
  * @param mintAddress The token's mint address
  * @returns Promise containing the token details or mint address on error
  */
-async function getTokenDetails(mintAddress: string): Promise<TokenDetails | string> {
+export async function getTokenDetails(mintAddress: string): Promise<TokenDetails | string> {
     const apiKey = process.env.VYBE_KEY;
     if (!apiKey) {
         console.error('VYBE_KEY is not set in environment variables');
         return mintAddress;
+    }
+
+    // Check rate limit
+    if (!checkRateLimit()) {
+        const waitTime = getRateLimitWaitTime();
+        console.warn(`Rate limit reached, waiting ${waitTime}ms before retrying`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
     }
 
     try {
@@ -111,6 +155,111 @@ async function getTokenDetails(mintAddress: string): Promise<TokenDetails | stri
         console.error(`Error fetching token details for ${mintAddress}:`, error);
         return mintAddress;
     }
+}
+
+/**
+ * Fetches the latest token prices for a list of mint addresses
+ * @param mintAddresses Array of token mint addresses
+ * @returns Promise containing a map of mint addresses to token details
+ */
+export async function getTokenPrices(mintAddresses: string[]): Promise<Map<string, TokenDetails>> {
+    const tokenMap = new Map<string, TokenDetails>();
+
+    // Create an array of promises with exponential backoff for rate limiting
+    const fetchPromises = mintAddresses.map(async (mintAddress, index) => {
+        // Stagger requests slightly to avoid hitting rate limits
+        if (index > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100 * index));
+        }
+
+        try {
+            const result = await getTokenDetails(mintAddress);
+            if (typeof result !== 'string') {
+                tokenMap.set(mintAddress, result);
+            }
+        } catch (error) {
+            console.error(`Error fetching token ${mintAddress}:`, error);
+        }
+    });
+
+    // Wait for all requests to complete
+    await Promise.all(fetchPromises);
+
+    return tokenMap;
+}
+
+/**
+ * Fetches prices for all tracked tokens from config
+ * @returns Promise containing an array of token price objects
+ */
+export async function getAllTrackedTokenPrices(): Promise<TokenPrice[]> {
+    try {
+        const tokenMap = await getTokenPrices(TRACKED_TOKENS);
+        const now = Math.floor(Date.now() / 1000);
+
+        return Array.from(tokenMap.values()).map(token => ({
+            mint_address: token.mintAddress,
+            symbol: token.symbol,
+            name: token.name,
+            current_price: token.price,
+            last_update_time: now
+        }));
+    } catch (error) {
+        console.error('Error fetching tracked token prices:', error);
+        return [];
+    }
+}
+
+/**
+ * Gets the current price for a specific token
+ * @param mintAddress Token mint address
+ * @returns Promise containing the token price data or null on error
+ */
+export async function getTokenPrice(mintAddress: string): Promise<TokenPrice | null> {
+    try {
+        const tokenDetails = await getTokenDetails(mintAddress);
+
+        if (typeof tokenDetails === 'string') {
+            return null;
+        }
+
+        return {
+            mint_address: tokenDetails.mintAddress,
+            symbol: tokenDetails.symbol,
+            name: tokenDetails.name,
+            current_price: tokenDetails.price,
+            last_update_time: Math.floor(Date.now() / 1000)
+        };
+    } catch (error) {
+        console.error(`Error fetching price for token ${mintAddress}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Checks if a token exists in the Vybe API
+ * @param mintAddress Token mint address to verify
+ * @returns Promise<boolean> True if token exists and data can be fetched
+ */
+export async function verifyToken(mintAddress: string): Promise<boolean> {
+    try {
+        const tokenDetails = await getTokenDetails(mintAddress);
+        return typeof tokenDetails !== 'string';
+    } catch (error) {
+        console.error(`Error verifying token ${mintAddress}:`, error);
+        return false;
+    }
+}
+
+/**
+ * Calculates the percentage change between two price points
+ * @param currentPrice Current token price
+ * @param previousPrice Previous token price
+ * @returns Percentage change (positive or negative)
+ */
+export function calculatePriceChangePercent(currentPrice: number, previousPrice: number): number {
+    if (previousPrice === 0) return 0;
+    return ((currentPrice - previousPrice) / previousPrice) * 100;
 }
 
 /**
@@ -378,7 +527,50 @@ export async function getRecentTransfersForWallet(
     }
 }
 
+/**
+ * Tests fetching prices for all tracked tokens
+ */
+export async function testTokenPrices() {
+    console.log('Testing token price fetching for all tracked tokens...');
+    const tokenPrices = await getAllTrackedTokenPrices();
+
+    console.log('\nToken prices:');
+    tokenPrices.forEach(token => {
+        console.log(`\n${token.symbol} (${token.mint_address.substring(0, 4)}...)`);
+        console.log(`   Price: $${token.current_price.toFixed(4)}`);
+        console.log(`   Last updated: ${new Date(token.last_update_time * 1000).toLocaleString()}`);
+    });
+}
+
+/**
+ * Get token details by symbol or mint address
+ * @param symbolOrAddress Token symbol or mint address
+ * @returns Promise containing the token price or null if not found
+ */
+export async function getTokenBySymbolOrAddress(symbolOrAddress: string): Promise<TokenPrice | null> {
+    try {
+        // If it's a valid mint address, try to get it directly
+        if (symbolOrAddress.length >= 32) {
+            return await getTokenPrice(symbolOrAddress);
+        }
+
+        // Otherwise, get all tokens and find by symbol (case insensitive)
+        const allTokens = await getAllTrackedTokenPrices();
+        const normalizedInput = symbolOrAddress.trim().toLowerCase();
+
+        // Find token by symbol match
+        const token = allTokens.find(
+            t => t.symbol.toLowerCase() === normalizedInput
+        );
+
+        return token || null;
+    } catch (error) {
+        console.error(`Error getting token by symbol or address (${symbolOrAddress}):`, error);
+        return null;
+    }
+}
+
 // Run tests if this file is executed directly
 if (require.main === module) {
-    testDigestFormatting().catch(console.error);
+    testTokenPrices().catch(console.error);
 } 
