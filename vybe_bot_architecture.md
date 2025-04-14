@@ -91,15 +91,47 @@ src/
 ├── tokenAlerts.ts        (Alert processing and notification system)
 ├── logger.ts             (Logging utilities)
 ├── config.ts             (Configuration constants)
+├── workerManager.ts      (Manages and coordinates worker threads)
+├── workers/
+│   ├── telegramBotWorker.ts    (Worker for Telegram bot operations)
+│   ├── tokenPriceWorker.ts     (Worker for token price monitoring)
+│   └── walletActivityWorker.ts (Worker for wallet activity monitoring)
 ```
 
-### 4. Environment Variables
+### 4. Worker Thread Architecture
+The application uses Node.js Worker Threads to improve performance and reliability:
+
+```
+Main Thread (Coordinator)
+├── Database Thread (Shared resource)
+├── Token Price Worker
+│   └── Price monitoring and updates
+├── Wallet Activity Worker
+│   └── Wallet transaction monitoring
+└── Telegram Bot Worker
+    └── Handling user commands and messages
+```
+
+Key benefits of this architecture:
+- Parallel processing of independent tasks
+- Isolated failures (one component crashing doesn't affect others)
+- Better resource utilization on multi-core systems
+- Improved response time for user interactions
+
+#### Worker Communication
+Workers communicate with the main thread using a structured message passing system:
+- Messages have a specific type and payload
+- Response types are matched against expected types
+- Timeouts prevent hung operations
+- Database operations are proxied through the main thread
+
+### 5. Environment Variables
 The application uses the following environment variables:
 - `VYBE_TELEGRAM_BOT_TOKEN`: The Telegram bot token from BotFather
 - `VYBE_KEY`: API key for Vybe Network API access
 - `TELEGRAM_CHAT_ID`: ID of the chat for sending messages
 
-### 5. Bot Commands
+### 6. Bot Commands
 The bot currently supports the following commands:
 
 - `/start` or `/help`: Initialize the bot and display welcome message
@@ -112,14 +144,15 @@ The bot currently supports the following commands:
 - `/remove_alert <id>`: Remove a specific price alert
 - `/testdigest`: Generate and send a test DEX data digest
 
-### 6. Key Services
+### 7. Key Services
 
-#### Wallet Tracking
+#### Wallet Tracking (Wallet Activity Worker)
 - Users can track up to 5 wallets per user
-- The system polls for new transactions on tracked wallets
+- The worker polls for new transactions on tracked wallets
 - Notifications are sent when new transactions are detected
+- Runs in its own thread to prevent blocking other operations
 
-#### Token Price Alerts
+#### Token Price Alerts (Token Price Worker)
 - Two types of alerts: general movements and specific price targets
 - General alerts trigger when price changes by a configured percentage (default 3%)
 - Price target alerts trigger when a specific price is reached
@@ -127,6 +160,13 @@ The bot currently supports the following commands:
 - Price history is stored in-memory with a fixed retention period (last 60 minutes)
 - Advanced detection for price patterns (reversals, accelerations)
 - Notification throttling to prevent spam
+- Runs in dedicated thread for consistent monitoring
+
+#### Telegram Bot Interface (Telegram Bot Worker)
+- Handles all Telegram API interactions
+- Processes user commands and messages
+- Sends notifications to users
+- Manages bot polling in its own thread
 
 #### Vybe Network Integration
 - Fetches DEX data for digest generation
@@ -134,29 +174,30 @@ The bot currently supports the following commands:
 - Provides token details for transactions
 - Fetches token price data
 
-#### Polling Services
-- Wallet Service: Periodically checks for wallet activity
-- Token Price Service: Periodically polls for token price updates
-- Both manage notification state to prevent duplicate alerts
-- Error handling with exponential backoff
+#### Worker Manager
+- Coordinates startup and shutdown of workers
+- Handles inter-worker communication
+- Manages worker lifecycle (restarts failed workers)
+- Proxies database operations to workers
 
-### 7. Security Measures
+### 8. Security Measures
 - Environment variables for sensitive credentials
 - Input validation for wallet addresses and token inputs
 - Rate limiting on API calls
 - Error handling and graceful degradation
 - Message throttling to prevent notification spam
+- Isolated worker processes for better security containment
 
 ## Data Flow
 
 1. User issues a command to the Telegram bot
-2. Bot validates the command and updates the database
-3. Polling services periodically check for:
-   - Wallet activity changes
-   - Token price movements
-   - Target price crossings
-4. When activity is detected, notifications are sent to users
-5. Scheduled digests are posted to configured topics
+2. Telegram Bot Worker processes the command and sends database requests to main thread
+3. Main thread coordinates with appropriate workers
+4. Workers run their operations in isolated threads:
+   - Wallet Activity Worker checks for wallet activity changes
+   - Token Price Worker monitors price movements and alerts
+5. Results and notifications flow back through the main thread to the Telegram Bot Worker
+6. Bot sends appropriate responses and notifications to users
 
 ## Limitations
 

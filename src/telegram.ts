@@ -29,7 +29,7 @@ if (!process.env.VYBE_TELEGRAM_BOT_TOKEN) {
 const bot = new TelegramBot(process.env.VYBE_TELEGRAM_BOT_TOKEN, {
     polling: {
         interval: 300,
-        autoStart: true,
+        autoStart: false,
         params: {
             timeout: 10
         }
