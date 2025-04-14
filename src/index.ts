@@ -1,55 +1,58 @@
 import 'dotenv/config';
-import { bot, setupBot } from './telegram';
 import { initializeDatabase } from './database';
-import { startPollingService } from './pollingService';
-import { initializeTokenPrices, startTokenPriceService } from './tokenPriceService';
-import { initializeTokenAlerts } from './tokenAlerts';
+import WorkerManager, { WorkerType, WorkerManagerEvent } from './workerManager';
 
+/**
+ * Start the application with worker threads
+ */
 async function startApp() {
-    console.log('Starting Vybe Bot application...');
+    console.log('Starting Vybe Bot application with worker threads...');
 
     // Initialize the database
     console.log('Initializing database...');
     const db = await initializeDatabase();
 
+    // Create worker manager
+    console.log('Creating worker manager...');
+    const workerManager = new WorkerManager(db);
 
-    // Initialize token prices and alert systems
-    console.log('Initializing token price service...');
-    await initializeTokenPrices(db);
+    // Listen for all workers ready
+    workerManager.once(WorkerManagerEvent.ALL_WORKERS_READY, () => {
+        console.log('✅ Vybe Bot is now running in worker threads mode!');
+        console.log('🔔 Token price alerts are active');
+        console.log('📈 Wallet activity tracking is active');
+    });
 
-    // Initialize token alerts (this will register callbacks with the price service)
-    console.log('Initializing token alert system...');
-    initializeTokenAlerts();
+    // Start the Telegram bot worker first (for demonstration)
+    console.log('Starting Telegram bot worker...');
+    await workerManager.startWorker(WorkerType.TELEGRAM);
 
-    // Start the wallet activity polling service
-    console.log('Starting wallet polling service...');
-    await startPollingService(db);
+    // Initialize the Telegram bot
+    console.log('Setting up Telegram bot...');
+    await workerManager.sendAndWaitForResponse(
+        WorkerType.TELEGRAM,
+        { type: 'SETUP_BOT', data: { db } },
+        'BOT_SETUP_COMPLETE'
+    );
 
-    // Start the token price polling service
-    console.log('Starting token price service...');
-    await startTokenPriceService(db);
+    // Once we have more workers implemented, we would start them here:
+    // await workerManager.startWorker(WorkerType.TOKEN_PRICE);
+    // await workerManager.startWorker(WorkerType.WALLET_ACTIVITY);
+    // await workerManager.startWorker(WorkerType.ALERT_PROCESSING);
 
-    // Setup the bot commands and handlers
-    console.log('Setting up Telegram bot commands...');
-    setupBot(db);
+    console.log('All workers started successfully');
 
-    console.log('✅ Vybe Bot is now running!');
-    console.log('🔔 Token price alerts are active');
-    console.log('📈 Wallet activity tracking is active');
+    // Graceful shutdown handler
+    process.on('SIGINT', async () => {
+        console.log('Shutting down gracefully...');
+
+        // Shutdown all workers
+        await workerManager.shutdown();
+
+        console.log('Goodbye!');
+        process.exit(0);
+    });
 }
-
-// Graceful shutdown handler
-process.on('SIGINT', async () => {
-    console.log('Shutting down gracefully...');
-
-    // Close telegram bot 
-    bot.stopPolling();
-
-    // You can add any cleanup here
-
-    console.log('Goodbye!');
-    process.exit(0);
-});
 
 // Start the application
 startApp().catch(error => {

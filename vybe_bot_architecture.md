@@ -98,9 +98,6 @@ The application uses the following environment variables:
 - `VYBE_TELEGRAM_BOT_TOKEN`: The Telegram bot token from BotFather
 - `VYBE_KEY`: API key for Vybe Network API access
 - `TELEGRAM_CHAT_ID`: ID of the chat for sending messages
-- `TELEGRAM_GROUP_ID`: (Optional) ID of the group for public alerts and digests
-- `VYBE_DIGEST_TOPIC_ID`: (Optional) ID of the topic within the group for digests
-- `ADMIN_CHAT_ID`: (Optional) Telegram chat ID of the administrator
 
 ### 5. Bot Commands
 The bot currently supports the following commands:
