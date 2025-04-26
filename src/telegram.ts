@@ -40,11 +40,20 @@ let isPolling = false;
 // Map to track users waiting for wallet addresses
 const usersWaitingForWallet = new Map<number, boolean>();
 const usersWaitingToRemoveWallet = new Map<number, boolean>();
+// Map to track users waiting for token input
+const usersWaitingForToken = new Map<number, boolean>();
+// Map to track users waiting for alert token and price
+const usersWaitingForAlertToken = new Map<number, boolean>();
+const usersWaitingForAlertPrice = new Map<number, { token: string }>();
+// Map to track users waiting for alert ID to remove
+const usersWaitingToRemoveAlert = new Map<number, boolean>();
 
 // Set up the commands that will appear in the menu
 bot.setMyCommands([
     { command: 'start', description: 'Start the bot and see available commands' },
     { command: 'track_wallet', description: 'Track a Solana wallet' },
+    { command: 'track_token', description: 'Track a token for price alerts' },
+    { command: 'set_alert', description: 'Set price target alert for a token' },
 ]).then(() => {
     console.log('Bot commands menu set successfully');
 }).catch((error) => {
@@ -86,10 +95,10 @@ export function setupBot(db: any) {
             `/remove_wallet- Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
-            `/track_token <code>symbol/address</code> - Get notified about price movements\n` +
+            `/track_token - Get notified about price movements\n` +
             `  Example: /track_token SOL or /track_token 6p6xgHy...\n\n` +
 
-            `/set_alert <code>symbol/address</code> <code>targetPrice</code> - Get notified when price reaches target\n` +
+            `/set_alert - Get notified when price reaches target\n` +
             `  Example: /set_alert SOL 100 or /set_alert BONK 0.00001\n\n` +
 
             `/my_alerts - View your active price alerts\n` +
@@ -238,6 +247,288 @@ export function setupBot(db: any) {
                 );
             }
         }
+
+        // Check if user is waiting for token input
+        if (usersWaitingForToken.get(chatId)) {
+            // Remove waiting state
+            usersWaitingForToken.delete(chatId);
+
+            // Send immediate feedback that we're processing
+            await bot.sendMessage(
+                chatId,
+                `🔍 Processing your request for token "${text}"...`,
+                { parse_mode: 'Markdown' }
+            );
+
+            try {
+                // Check if user has reached their subscription limit
+                const currentCount = await getTokenSubscriptionCount(db, chatId);
+                if (currentCount >= PRICE_ALERT_CONFIG.maxAlertsPerUser) {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ You've reached the maximum limit of ${PRICE_ALERT_CONFIG.maxAlertsPerUser} tracked tokens. ` +
+                        `Please remove some before adding more.\n\n` +
+                        `Use /my_alerts to view your current alerts.`
+                    );
+                    return;
+                }
+
+                // Get token details from input (could be symbol or address)
+                const token = await getTokenBySymbolOrAddress(text);
+
+                if (!token) {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Token "${text}" not found. Please provide a valid token symbol or address.\n\n` +
+                        `Use /track_token to try again with a different token.`
+                    );
+                    return;
+                }
+
+                // Subscribe user to this token's alerts
+                await subscribeToTokenAlerts(db, chatId, token.mint_address);
+
+                // Get 24h price change for context
+                const priceChange24h = await getTokenPriceChange(db, token.mint_address, 24);
+                const changeText = priceChange24h ?
+                    `(${priceChange24h >= 0 ? '+' : ''}${priceChange24h.toFixed(2)}% in 24h)` : '';
+
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Successfully set up tracking for <b>${token.name} (${token.symbol})</b>!\n\n` +
+                    `💰 Current price: $${token.current_price.toFixed(4)} ${changeText}\n\n` +
+                    `You'll receive alerts when price moves significantly (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%).\n\n` +
+                    `To set specific price targets, use:\n` +
+                    `/set_alert ${token.symbol} <code>target_price</code>`,
+                    { parse_mode: 'HTML' }
+                );
+
+                // Send a test alert if this is their first token
+                if (currentCount === 0) {
+                    // Wait a bit before sending test alert
+                    setTimeout(async () => {
+                        await sendTestPriceAlerts(chatId, token);
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('Error in /track_token command:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error tracking token: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    `Use /track_token to try again.`
+                );
+            }
+        }
+
+        // Check if user is waiting for alert token input
+        if (usersWaitingForAlertToken.get(chatId)) {
+            // Remove waiting state
+            usersWaitingForAlertToken.delete(chatId);
+
+            // Send immediate feedback that we're processing
+            await bot.sendMessage(
+                chatId,
+                `🔍 Processing your request for token "${text}"...`,
+                { parse_mode: 'Markdown' }
+            );
+
+            try {
+                // Get token details from input (could be symbol or address)
+                const token = await getTokenBySymbolOrAddress(text);
+
+                if (!token) {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Token "${text}" not found. Please provide a valid token symbol or address.\n\n` +
+                        `Use /set_alert to try again with a different token.`
+                    );
+                    return;
+                }
+
+                // Store the token and ask for price
+                usersWaitingForAlertPrice.set(chatId, { token: text });
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Found token: <b>${token.name} (${token.symbol})</b>\n\n` +
+                    `💰 Current price: $${token.current_price.toFixed(4)}\n\n` +
+                    `Please enter your target price for the alert.`,
+                    { parse_mode: 'HTML' }
+                );
+
+                // Critical fix: Return here to prevent continuing to the price check in the same function call
+                return;
+            } catch (error) {
+                console.error('Error in /set_alert command:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error processing token: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    `Use /set_alert to try again.`
+                );
+                return;
+            }
+        }
+
+        // Check if user is waiting for alert price input
+        if (usersWaitingForAlertPrice.has(chatId)) {
+            const tokenInfo = usersWaitingForAlertPrice.get(chatId);
+            if (!tokenInfo) return;
+
+            // Remove waiting state only if a valid price is entered
+            // (so we can keep prompting if the input is invalid)
+
+            // Send immediate feedback that we're processing
+            await bot.sendMessage(
+                chatId,
+                `🔍 Processing your target price "${text}"...`,
+                { parse_mode: 'Markdown' }
+            );
+
+            // Check if input is a valid number
+            const targetPrice = parseFloat(text);
+            if (isNaN(targetPrice) || targetPrice <= 0) {
+                await bot.sendMessage(
+                    chatId,
+                    `❌ That doesn't look like a valid number. Please enter a valid price for <b>${tokenInfo.token.toUpperCase()}</b> (e.g., 100), or type /cancel to start over.`,
+                    { parse_mode: 'HTML' }
+                );
+                // Do NOT remove the user from usersWaitingForAlertPrice, so they can try again
+                return;
+            }
+
+            // Remove waiting state only after a valid price
+            usersWaitingForAlertPrice.delete(chatId);
+
+            try {
+                // Get token details again
+                const token = await getTokenBySymbolOrAddress(tokenInfo.token);
+                if (!token) {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Token "${tokenInfo.token}" not found. Please try again.\n\n` +
+                        `Use /set_alert to start over.`
+                    );
+                    return;
+                }
+
+                // Check if user has reached their alert limit
+                const currentAlerts = await getUserPriceAlerts(db, chatId);
+                if (currentAlerts.length >= PRICE_ALERT_CONFIG.maxAlertsPerUser) {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ You've reached the maximum limit of ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts. ` +
+                        `Please remove some with /remove_alert before adding more.`
+                    );
+                    return;
+                }
+
+                // Determine if this is a price rise or fall alert
+                const isAboveTarget = targetPrice > token.current_price;
+
+                // Validate if target makes sense
+                const errorMessage = validatePriceTarget(token, targetPrice);
+                if (errorMessage) {
+                    await bot.sendMessage(chatId, errorMessage + '\n\nUse /set_alert to try again.', { parse_mode: 'HTML' });
+                    return;
+                }
+
+                // Create the price alert
+                const alertId = await createPriceAlert(
+                    db,
+                    chatId,
+                    token.mint_address,
+                    targetPrice,
+                    isAboveTarget
+                );
+
+                if (!alertId) {
+                    throw new Error('Failed to create price alert');
+                }
+
+                // Ensure user is also subscribed to general alerts for this token
+                await subscribeToTokenAlerts(db, chatId, token.mint_address);
+
+                // Get recent price change to estimate time to target
+                const recentChange = await getTokenPriceChange(db, token.mint_address, 1); // 1 hour change
+                let timeEstimate = '';
+
+                if (recentChange && recentChange !== 0) {
+                    const hours = estimateTimeToTarget(token.current_price, targetPrice, recentChange);
+                    if (hours !== null) {
+                        timeEstimate = `\n\nBased on recent movements, your target might be reached in ${formatTimeEstimate(hours)}.`;
+                    }
+                }
+
+                // Price movement direction
+                const priceMovement = isAboveTarget
+                    ? `rises to $${targetPrice.toFixed(4)}`
+                    : `falls to $${targetPrice.toFixed(4)}`;
+
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Price alert set for <b>${token.symbol}</b>!\n\n` +
+                    `You'll be notified when the price ${priceMovement}.\n` +
+                    `Current price: $${token.current_price.toFixed(4)}\n` +
+                    `Target price: $${targetPrice.toFixed(4)}` +
+                    timeEstimate +
+                    `\n\nYou can view your alerts with /my_alerts`,
+                    { parse_mode: 'HTML' }
+                );
+            } catch (error) {
+                console.error('Error in /set_alert command:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error setting price alert: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    `Use /set_alert to try again.`
+                );
+            }
+        }
+
+        // Check if user is waiting to remove an alert
+        if (usersWaitingToRemoveAlert.get(chatId)) {
+            // Remove waiting state
+            usersWaitingToRemoveAlert.delete(chatId);
+
+            // Send immediate feedback that we're processing
+            await bot.sendMessage(
+                chatId,
+                `🔍 Processing your request to remove alert #${text}...`
+            );
+
+            try {
+                // Parse the alert ID
+                const alertId = parseInt(text.trim());
+
+                if (isNaN(alertId)) {
+                    await bot.sendMessage(
+                        chatId,
+                        '❌ Please provide a valid alert ID number.\n\n' +
+                        'Use /remove_alert to try again.'
+                    );
+                    return;
+                }
+
+                const removed = await removePriceAlert(db, chatId, alertId);
+
+                if (removed) {
+                    await bot.sendMessage(chatId, `✅ Successfully removed price alert #${alertId}.`);
+                } else {
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Could not find alert #${alertId} or you don't have permission to remove it.\n\n` +
+                        'Use /my_alerts to view your active alerts and verify the ID.'
+                    );
+                }
+            } catch (error) {
+                console.error('Error in /remove_alert command:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error removing alert: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    'Use /remove_alert to try again.'
+                );
+            }
+
+            return;
+        }
     });
 
     // Handle /my_wallets command
@@ -276,174 +567,19 @@ export function setupBot(db: any) {
     });
 
     // Handle /track_token command
-    bot.onText(/\/track_token (.+)/, async (msg, match) => {
-        if (!match) {
-            await bot.sendMessage(msg.chat.id, '❌ Please provide a token symbol or address to track.');
-            return;
-        }
-
+    bot.onText(/\/track_token/, async (msg) => {
         const chatId = msg.chat.id;
-        const tokenInput = match[1].trim();
-
-        try {
-            // Check if user has reached their subscription limit
-            const currentCount = await getTokenSubscriptionCount(db, chatId);
-            if (currentCount >= PRICE_ALERT_CONFIG.maxAlertsPerUser) {
-                await bot.sendMessage(
-                    chatId,
-                    `❌ You've reached the maximum limit of ${PRICE_ALERT_CONFIG.maxAlertsPerUser} tracked tokens. ` +
-                    `Please remove some before adding more.`
-                );
-                return;
-            }
-
-            // Get token details from input (could be symbol or address)
-            const token = await getTokenBySymbolOrAddress(tokenInput);
-
-            if (!token) {
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Token not found. Please provide a valid token symbol or address.`
-                );
-                return;
-            }
-
-            // Subscribe user to this token's alerts
-            await subscribeToTokenAlerts(db, chatId, token.mint_address);
-
-            // Get 24h price change for context
-            const priceChange24h = await getTokenPriceChange(db, token.mint_address, 24);
-            const changeText = priceChange24h ?
-                `(${priceChange24h >= 0 ? '+' : ''}${priceChange24h.toFixed(2)}% in 24h)` : '';
-
-            await bot.sendMessage(
-                chatId,
-                `✅ Now tracking <b>${token.name} (${token.symbol})</b> for price movements.\n\n` +
-                `💰 Current price: $${token.current_price.toFixed(4)} ${changeText}\n\n` +
-                `You'll receive alerts when price moves significantly (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%).\n\n` +
-                `To set specific price targets, use:\n` +
-                `/set_alert ${token.symbol} <code>target_price</code>`,
-                { parse_mode: 'HTML' }
-            );
-
-            // Send a test alert if this is their first token
-            if (currentCount === 0) {
-                // Wait a bit before sending test alert
-                setTimeout(async () => {
-                    await sendTestPriceAlerts(chatId, token);
-                }, 3000);
-            }
-        } catch (error) {
-            console.error('Error in /track_token command:', error);
-            await bot.sendMessage(
-                chatId,
-                `❌ Error tracking token: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
+        // Set user as waiting for token input
+        usersWaitingForToken.set(chatId, true);
+        await bot.sendMessage(chatId, '🔍 Please enter the token symbol or address you want to track.\n\n', { parse_mode: 'Markdown' });
     });
 
     // Handle /set_alert command
-    bot.onText(/\/set_alert (.+) (.+)/, async (msg, match) => {
-        if (!match || match.length < 3) {
-            await bot.sendMessage(
-                msg.chat.id,
-                '❌ Please provide both token symbol/address and target price. Example: /set_alert SOL 100'
-            );
-            return;
-        }
-
+    bot.onText(/\/set_alert/, async (msg) => {
         const chatId = msg.chat.id;
-        const tokenInput = match[1].trim();
-        const targetPriceInput = match[2].trim();
-
-        try {
-            // Parse target price
-            const targetPrice = parseFloat(targetPriceInput);
-            if (isNaN(targetPrice) || targetPrice <= 0) {
-                await bot.sendMessage(chatId, '❌ Please provide a valid positive number for the target price.');
-                return;
-            }
-
-            // Get token details
-            const token = await getTokenBySymbolOrAddress(tokenInput);
-            if (!token) {
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Token not found. Please provide a valid token symbol or address.`
-                );
-                return;
-            }
-
-            // Check if user has reached their alert limit
-            const currentAlerts = await getUserPriceAlerts(db, chatId);
-            if (currentAlerts.length >= PRICE_ALERT_CONFIG.maxAlertsPerUser) {
-                await bot.sendMessage(
-                    chatId,
-                    `❌ You've reached the maximum limit of ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts. ` +
-                    `Please remove some with /remove_alert before adding more.`
-                );
-                return;
-            }
-
-            // Determine if this is a price rise or fall alert
-            const isAboveTarget = targetPrice > token.current_price;
-
-            // Validate if target makes sense
-            const errorMessage = validatePriceTarget(token, targetPrice);
-            if (errorMessage) {
-                await bot.sendMessage(chatId, errorMessage, { parse_mode: 'HTML' });
-                return;
-            }
-
-            // Create the price alert
-            const alertId = await createPriceAlert(
-                db,
-                chatId,
-                token.mint_address,
-                targetPrice,
-                isAboveTarget
-            );
-
-            if (!alertId) {
-                throw new Error('Failed to create price alert');
-            }
-
-            // Ensure user is also subscribed to general alerts for this token
-            await subscribeToTokenAlerts(db, chatId, token.mint_address);
-
-            // Get recent price change to estimate time to target
-            const recentChange = await getTokenPriceChange(db, token.mint_address, 1); // 1 hour change
-            let timeEstimate = '';
-
-            if (recentChange && recentChange !== 0) {
-                const hours = estimateTimeToTarget(token.current_price, targetPrice, recentChange);
-                if (hours !== null) {
-                    timeEstimate = `\n\nBased on recent movements, your target might be reached in ${formatTimeEstimate(hours)}.`;
-                }
-            }
-
-            // Price movement direction
-            const priceMovement = isAboveTarget
-                ? `rises to $${targetPrice.toFixed(4)}`
-                : `falls to $${targetPrice.toFixed(4)}`;
-
-            await bot.sendMessage(
-                chatId,
-                `✅ Price alert set for <b>${token.symbol}</b>!\n\n` +
-                `You'll be notified when the price ${priceMovement}.\n` +
-                `Current price: $${token.current_price.toFixed(4)}\n` +
-                `Target price: $${targetPrice.toFixed(4)}` +
-                timeEstimate +
-                `\n\nYou can view your alerts with /my_alerts`,
-                { parse_mode: 'HTML' }
-            );
-        } catch (error) {
-            console.error('Error in /set_alert command:', error);
-            await bot.sendMessage(
-                chatId,
-                `❌ Error setting price alert: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
+        // Set user as waiting for token input
+        usersWaitingForAlertToken.set(chatId, true);
+        await bot.sendMessage(chatId, '🔍 Please enter the token symbol or address for your price alert.\n\n', { parse_mode: 'Markdown' });
     });
 
     // Handle /my_alerts command
@@ -523,38 +659,11 @@ export function setupBot(db: any) {
     });
 
     // Handle /remove_alert command
-    bot.onText(/\/remove_alert (.+)/, async (msg, match) => {
-        if (!match) {
-            await bot.sendMessage(msg.chat.id, '❌ Please provide an alert ID to remove.');
-            return;
-        }
-
+    bot.onText(/\/remove_alert/, async (msg) => {
         const chatId = msg.chat.id;
-        const alertId = parseInt(match[1].trim());
-
-        if (isNaN(alertId)) {
-            await bot.sendMessage(chatId, '❌ Please provide a valid alert ID number.');
-            return;
-        }
-
-        try {
-            const removed = await removePriceAlert(db, chatId, alertId);
-
-            if (removed) {
-                await bot.sendMessage(chatId, `✅ Successfully removed price alert #${alertId}.`);
-            } else {
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Could not find alert #${alertId} or you don't have permission to remove it.`
-                );
-            }
-        } catch (error) {
-            console.error('Error in /remove_alert command:', error);
-            await bot.sendMessage(
-                chatId,
-                `❌ Error removing alert: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
+        // Set user as waiting for alert ID
+        usersWaitingToRemoveAlert.set(chatId, true);
+        await bot.sendMessage(chatId, '🔍 Please enter the ID of the alert you want to remove.\n\nYou can view your alerts with /my_alerts');
     });
 
     // Handle /testdigest command
