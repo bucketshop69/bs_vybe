@@ -53,8 +53,8 @@ export const TRACKED_TOKENS = [
 // Price alert configuration
 export const PRICE_ALERT_CONFIG = {
     pollingIntervalMs: 60 * 1000,           // 1 minute in milliseconds
-    generalAlertThresholdPercent: 3,        // 3% change triggers general alert
+    generalAlertThresholdPercent: 1,        // 3% change triggers general alert
     maxAlertsPerUser: 5,                    // Maximum 5 alerts per user
-    tooCloseThresholdPercent: 2,            // Target within 2% of current price is too close
+    tooCloseThresholdPercent: 1,            // Target within 2% of current price is too close
     tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
 };
