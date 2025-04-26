@@ -1,7 +1,8 @@
 import { bot } from './telegram';
 import { getAllTrackedWalletsWithState, updateLastNotifiedSignature } from './database';
-import { getRecentTransfersForWallet, VybeTransfer } from './vybeApi';
+import { getRecentTransfersForWallet, VybeTransfer, getRecentSignaturesForWallet } from './vybeApi';
 import { walletLog, logTransferNotification } from './logger';
+import { SPAM_ADDRESSES } from './constants';
 
 // Function to format a transfer for display
 function formatTransfer(transfer: VybeTransfer): string {
@@ -21,9 +22,39 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
     try {
         walletLog(walletAddress, null, `Checking for new transfers`, { userCount: users.length });
 
-        const transfers = await getRecentTransfersForWallet(walletAddress);
+        // --- Lightweight polling: get recent signatures from Helius RPC ---
+        const recentSignatures = await getRecentSignaturesForWallet(walletAddress, 5);
+        if (!recentSignatures || recentSignatures.length === 0) {
+            walletLog(walletAddress, null, `No signatures found from Helius RPC`);
+            return;
+        }
+
+        // For each user, check if there is a new signature
+        let shouldFetchTransfers = false;
+        for (const user of users) {
+            if (!user.lastSig || recentSignatures[0] !== user.lastSig) {
+                shouldFetchTransfers = true;
+                break;
+            }
+        }
+        if (!shouldFetchTransfers) {
+            walletLog(walletAddress, null, `No new signatures for any user, skipping Vybe API call`);
+            return;
+        }
+        // --- Only now call Vybe API for full transfer details ---
+        let transfers = await getRecentTransfersForWallet(walletAddress);
         if (!transfers || transfers.length === 0) {
             walletLog(walletAddress, null, `No transfers found`);
+            return;
+        }
+
+        // --- Spam address filtering ---
+        transfers = transfers.filter(transfer =>
+            !SPAM_ADDRESSES.includes(transfer.senderAddress) &&
+            !SPAM_ADDRESSES.includes(transfer.receiverAddress)
+        );
+        if (transfers.length === 0) {
+            walletLog(walletAddress, null, `All transfers filtered out as spam`);
             return;
         }
 
@@ -137,12 +168,14 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                     disable_web_page_preview: true
                 });
 
-                // Update the last notified signature with the newest transfer
+                // Update the last notified signature with the latest from RPC
+                const recentSignatures = await getRecentSignaturesForWallet(walletAddress, 1);
+                const latestRpcSignature = recentSignatures[0] || newTransfers[0].signature;
                 await updateLastNotifiedSignature(
                     db,
                     userId,
                     walletAddress,
-                    newTransfers[0].signature,
+                    latestRpcSignature,
                     newTransfers[0].blockTime
                 );
 
@@ -259,4 +292,31 @@ export async function startPollingService(db: any) {
     }, 15000); // 15000 milliseconds = 15 seconds
 
     console.log('Wallet activity polling service started');
+}
+
+// Debug/Test section: Run a test of lightweight polling and spam filtering if this file is executed directly
+if (require.main === module) {
+    (async () => {
+        const testWallet = process.argv[2] || '7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C';
+        console.log(`\n[DEBUG] Testing lightweight polling and spam filtering for wallet: ${testWallet}`);
+
+        // --- Debug Helius RPC signature fetch ---
+        const signatures = await getRecentSignaturesForWallet(testWallet, 10);
+        console.log(`[DEBUG] Latest signatures from Helius RPC for ${testWallet}:`);
+        console.log(signatures);
+
+        // Simulate a user object for testing
+        const users = [
+            {
+                userId: 123456,
+                lastSig: null, // Set to a known signature to test skipping
+                lastBlockTime: null,
+                trackingStartedAt: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
+                createdAt: new Date(Date.now() - 86400 * 1000).toISOString()
+            }
+        ];
+        // Use an in-memory DB or mock as needed; here we pass null for demonstration
+        await checkSingleWalletActivity(null, testWallet, users);
+        console.log('[DEBUG] Test complete.');
+    })();
 } 

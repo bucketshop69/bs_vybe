@@ -565,6 +565,38 @@ export async function getTokenBySymbolOrAddress(symbolOrAddress: string): Promis
     }
 }
 
+/**
+ * Fetches recent transaction signatures for a specific wallet address using Helius RPC
+ * @param walletAddress The Solana wallet address to fetch signatures for
+ * @param limit Maximum number of signatures to return (default: 5)
+ * @returns Promise containing an array of signature strings
+ */
+export async function getRecentSignaturesForWallet(walletAddress: string, limit: number = 5): Promise<string[]> {
+    const apiKey = process.env.HELIUS_RPC_KEY;
+    if (!apiKey) {
+        console.error('HELIUS_RPC_KEY is not set in environment variables');
+        return [];
+    }
+
+    const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${apiKey}`;
+    try {
+        const response = await axios.post(heliusUrl, {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getSignaturesForAddress",
+            params: [walletAddress, { limit }],
+        });
+        const data = response.data;
+        if (data && typeof data === 'object' && 'result' in data && Array.isArray((data as any).result)) {
+            return (data as any).result.map((entry: any) => entry.signature);
+        }
+        return [];
+    } catch (error) {
+        console.error(`Error fetching signatures for wallet ${walletAddress} from Helius:`, error);
+        return [];
+    }
+}
+
 // Run tests if this file is executed directly
 if (require.main === module) {
     getRecentTransfersForWallet("7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C")
