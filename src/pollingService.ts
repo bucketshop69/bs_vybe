@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { bot } from './telegram';
 import { getAllTrackedWalletsWithState, updateLastNotifiedSignature } from './database';
 import { getRecentTransfersForWallet, VybeTransfer } from './vybeApi';
@@ -7,10 +6,8 @@ import { walletLog, logTransferNotification } from './logger';
 // Function to format a transfer for display
 function formatTransfer(transfer: VybeTransfer): string {
     const time = new Date(transfer.blockTime * 1000).toLocaleString();
-    const symbol = typeof transfer.tokenDetails === 'string'
-        ? transfer.tokenDetails
-        : transfer.tokenDetails.symbol;
-    return `- ${time}: ${transfer.amount} ${symbol} from \`${transfer.senderAddress}\` to \`${transfer.receiverAddress}\`\n  [View on Solscan](https://solscan.io/tx/${transfer.signature})`;
+    return `💸 ${time}\n`
+        + `[View on Solscan](https://solscan.io/tx/${transfer.signature})`;
 }
 
 // Function to check for new transfers for a specific wallet
@@ -122,7 +119,8 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
                 });
 
                 // Format the summary message
-                let message = `🔔 New transfers detected for wallet \`${walletAddress}\`:\n\n`;
+                let message = `🔔 *New Transfers for* \`${walletAddress}\`\n`
+                    + `[View All Activity on Vybe](https://vybe.fyi/wallets/${walletAddress}?tab=transfers&order=blocktime&desc=true)\n\n`;
 
                 // Add details for each transfer (limit to 5 most recent)
                 const transfersToShow = newTransfers.slice(0, 5);
@@ -130,7 +128,7 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
 
                 // If there are more transfers, add a count
                 if (newTransfers.length > 5) {
-                    message += `\n\n...and ${newTransfers.length - 5} more transfers.`;
+                    message += `\n\n📑 _+${newTransfers.length - 5} more transfers_`;
                 }
 
                 // Send the summary message
@@ -253,12 +251,12 @@ export async function startPollingService(db: any) {
         console.error('Error logging tracked wallets:', error);
     }
 
-    // Run every minute
-    cron.schedule('* * * * *', () => {
+    // Run every 15 seconds
+    setInterval(() => {
         checkWalletActivity(db).catch(error => {
             console.error('Error in polling service:', error);
         });
-    });
+    }, 15000); // 15000 milliseconds = 15 seconds
 
     console.log('Wallet activity polling service started');
 } 

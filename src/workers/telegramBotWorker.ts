@@ -78,9 +78,7 @@ port.on('message', async (message) => {
                 console.log('Setting up telegram bot...');
                 setupBot(dbProxy);
 
-                // Explicitly start polling
-                bot.startPolling();
-
+                // Remove explicit polling start since it's handled in setupBot
                 port.postMessage({ type: 'BOT_SETUP_COMPLETE' });
                 break;
 

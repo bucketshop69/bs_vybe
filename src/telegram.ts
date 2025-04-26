@@ -5,9 +5,7 @@ import {
     addTrackedWallet,
     getUserTrackedWallets,
     removeTrackedWallet,
-    getTrackedWalletCount,
     subscribeToTokenAlerts,
-    unsubscribeFromTokenAlerts,
     getUserTokenSubscriptions,
     getTokenSubscriptionCount,
     createPriceAlert,
@@ -16,7 +14,7 @@ import {
     getTokenPrice
 } from './database';
 import { getTokenPriceChange } from './tokenPriceService';
-import { TRACKED_TOKENS, PRICE_ALERT_CONFIG } from './config';
+import { PRICE_ALERT_CONFIG } from './config';
 import { sendTestPriceAlerts, estimateTimeToTarget, formatTimeEstimate, validatePriceTarget } from './tokenAlerts';
 
 dotenv.config();
@@ -36,19 +34,56 @@ const bot = new TelegramBot(process.env.VYBE_TELEGRAM_BOT_TOKEN, {
     }
 });
 
+// Track if bot is already polling
+let isPolling = false;
+
+// Map to track users waiting for wallet addresses
+const usersWaitingForWallet = new Map<number, boolean>();
+const usersWaitingToRemoveWallet = new Map<number, boolean>();
+
+// Set up the commands that will appear in the menu
+bot.setMyCommands([
+    { command: 'start', description: 'Start the bot and see available commands' },
+    { command: 'track_wallet', description: 'Track a Solana wallet' },
+]).then(() => {
+    console.log('Bot commands menu set successfully');
+}).catch((error) => {
+    console.error('Error setting bot commands:', error);
+});
+
 // Replace startBot function with setupBot that accepts db parameter
 export function setupBot(db: any) {
+    // Only start polling if not already polling
+    if (!isPolling) {
+        bot.startPolling().then(() => {
+            isPolling = true;
+            console.log('Bot polling started successfully');
+        }).catch((error) => {
+            console.error('Error starting bot polling:', error);
+            // If it's a conflict error, try to stop polling first
+            if (error.response?.body?.error_code === 409) {
+                console.log('Bot already polling, attempting to stop and restart...');
+                bot.stopPolling().then(() => {
+                    bot.startPolling().then(() => {
+                        isPolling = true;
+                        console.log('Bot polling restarted successfully');
+                    });
+                });
+            }
+        });
+    }
+
     // Handle /start command
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
         console.log('Received /start command from chatId:', chatId);
         await bot.sendMessage(chatId,
-            `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
+            `🚀 <b>Welcome to the bs_vybe Bot!</b> 🚀\n\n` +
 
             `<b>📱 WALLET TRACKING</b>\n` +
-            `/track_wallet <code>address</code> - Track a Solana wallet\n` +
+            `/track_wallet - Track a Solana wallet\n` +
             `/my_wallets - View your tracked wallets\n` +
-            `/remove_wallet <code>address</code> - Stop tracking a wallet\n\n` +
+            `/remove_wallet- Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
             `/track_token <code>symbol/address</code> - Get notified about price movements\n` +
@@ -81,9 +116,9 @@ export function setupBot(db: any) {
             `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
 
             `<b>📱 WALLET TRACKING</b>\n` +
-            `/track_wallet <code>address</code> - Track a Solana wallet\n` +
+            `/track_wallet - Track a Solana wallet\n` +
             `/my_wallets - View your tracked wallets\n` +
-            `/remove_wallet <code>address</code> - Stop tracking a wallet\n\n` +
+            `/remove_wallet - Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
             `/track_token <code>symbol/address</code> - Get notified about price movements\n` +
@@ -108,27 +143,100 @@ export function setupBot(db: any) {
     });
 
     // Handle /track_wallet command
-    bot.onText(/\/track_wallet (.+)/, async (msg, match) => {
-        if (!match) {
-            await bot.sendMessage(msg.chat.id, '❌ Please provide a wallet address to track.');
-            return;
-        }
-
+    bot.onText(/\/track_wallet/, async (msg) => {
         const chatId = msg.chat.id;
-        const walletAddress = match[1];
 
-        // Basic Solana address validation (44 characters, base58)
-        if (!/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(walletAddress)) {
-            await bot.sendMessage(chatId, '❌ Invalid Solana wallet address. Please provide a valid 44-character base58 address.');
-            return;
+        // Set user as waiting for wallet address
+        usersWaitingForWallet.set(chatId, true);
+
+        await bot.sendMessage(
+            chatId,
+            '🔍 Please paste the Solana wallet address you want to track.\n\n',
+            { parse_mode: 'Markdown' }
+        );
+    });
+
+    // Handle /remove_wallet command
+    bot.onText(/\/remove_wallet/, async (msg) => {
+        const chatId = msg.chat.id;
+
+        // Set user as waiting to remove wallet
+        usersWaitingToRemoveWallet.set(chatId, true);
+
+        await bot.sendMessage(
+            chatId,
+            '🔍 Please paste the Solana wallet address you want to stop tracking.\n\n',
+            { parse_mode: 'Markdown' }
+        );
+    });
+
+    // Handle wallet address input
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const text = msg.text || '';
+
+        // Check if user is waiting for wallet address to track
+        if (usersWaitingForWallet.get(chatId)) {
+            // Remove waiting state
+            usersWaitingForWallet.delete(chatId);
+
+            // Basic Solana address validation (44 characters, base58)
+            if (!/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(text)) {
+                await bot.sendMessage(
+                    chatId,
+                    '❌ Invalid Solana wallet address. Please provide a valid 44-character base58 address.\n\n' +
+                    'Use /track_wallet to try again.'
+                );
+                return;
+            }
+
+            try {
+                await addTrackedWallet(db, chatId, text);
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Now tracking wallet \`${text}\` for new transfers. You'll get alerts here.`,
+                    { parse_mode: 'Markdown' }
+                );
+            } catch (error) {
+                console.error('Error in wallet tracking:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error tracking wallet: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    'Use /track_wallet to try again.'
+                );
+            }
         }
 
-        try {
-            await addTrackedWallet(db, chatId, walletAddress);
-            await bot.sendMessage(chatId, `✅ Now tracking wallet <code>${walletAddress}</code> for new transfers. You'll get alerts here.`, { parse_mode: 'HTML' });
-        } catch (error) {
-            console.error('Error in /track_wallet command:', error);
-            await bot.sendMessage(chatId, `❌ Error tracking wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Check if user is waiting to remove wallet
+        if (usersWaitingToRemoveWallet.get(chatId)) {
+            // Remove waiting state
+            usersWaitingToRemoveWallet.delete(chatId);
+
+            // Basic Solana address validation (44 characters, base58)
+            if (!/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(text)) {
+                await bot.sendMessage(
+                    chatId,
+                    '❌ Invalid Solana wallet address. Please provide a valid 44-character base58 address.\n\n' +
+                    'Use /remove_wallet to try again.'
+                );
+                return;
+            }
+
+            try {
+                await removeTrackedWallet(db, chatId, text);
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Stopped tracking wallet \`${text}\`.`,
+                    { parse_mode: 'Markdown' }
+                );
+            } catch (error) {
+                console.error('Error in wallet removal:', error);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Error removing wallet: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
+                    'Use /remove_wallet to try again.'
+                );
+            }
         }
     });
 
@@ -139,7 +247,7 @@ export function setupBot(db: any) {
             const wallets = await getUserTrackedWallets(db, chatId);
 
             if (wallets.length === 0) {
-                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_wallet <code>address</code> to start tracking a wallet.");
+                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_wallet to start tracking a wallet.");
                 return;
             }
 
@@ -158,31 +266,12 @@ export function setupBot(db: any) {
                 message += '\n';
             });
 
-            message += "To stop tracking a wallet, use /remove_wallet <code>address</code>";
+            message += "To stop tracking a wallet, use /remove_wallet";
 
             await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
         } catch (error) {
             console.error('Error in /my_wallets command:', error);
             await bot.sendMessage(chatId, `❌ Error fetching your wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    });
-
-    // Handle /remove_wallet command
-    bot.onText(/\/remove_wallet (.+)/, async (msg, match) => {
-        if (!match) {
-            await bot.sendMessage(msg.chat.id, '❌ Please provide a wallet address to remove.');
-            return;
-        }
-
-        const chatId = msg.chat.id;
-        const walletAddress = match[1];
-
-        try {
-            await removeTrackedWallet(db, chatId, walletAddress);
-            await bot.sendMessage(chatId, `✅ Stopped tracking wallet <code>${walletAddress}</code>.`, { parse_mode: 'HTML' });
-        } catch (error) {
-            console.error('Error in /remove_wallet command:', error);
-            await bot.sendMessage(chatId, `❌ ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     });
 

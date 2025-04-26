@@ -290,12 +290,6 @@ export async function getProgramDauTimeSeries(programId: string): Promise<DauDat
             }
         );
 
-        console.log('API Response:', {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-            data: response.data
-        });
 
         // Validate response data
         if (!response.data?.data || !Array.isArray(response.data.data)) {
@@ -477,6 +471,7 @@ export async function getRecentTransfersForWallet(
     limit: number = 5
 ): Promise<VybeTransfer[] | null> {
     const apiKey = process.env.VYBE_KEY;
+    console.log(walletAddress);
 
     if (!apiKey) {
         console.error('VYBE_KEY is not set in environment variables');
@@ -498,6 +493,7 @@ export async function getRecentTransfersForWallet(
                 }
             }
         );
+        console.log(response.data);
 
         if (!response.data?.transfers || !Array.isArray(response.data.transfers)) {
             console.error('Invalid response format for wallet transfers:', response.data);
@@ -518,7 +514,6 @@ export async function getRecentTransfersForWallet(
             };
         });
         const transfers = await Promise.all(transferPromises);
-        console.log('API Response:', JSON.stringify(transfers, null, 2));
         // Await all the promises to resolve
         return transfers;
     } catch (error) {
@@ -572,5 +567,8 @@ export async function getTokenBySymbolOrAddress(symbolOrAddress: string): Promis
 
 // Run tests if this file is executed directly
 if (require.main === module) {
-    testTokenPrices().catch(console.error);
+    getRecentTransfersForWallet("7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C")
+        .then(res => {
+            console.log(res);
+        })
 } 

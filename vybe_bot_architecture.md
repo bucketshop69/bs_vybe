@@ -135,7 +135,7 @@ The application uses the following environment variables:
 The bot currently supports the following commands:
 
 - `/start` or `/help`: Initialize the bot and display welcome message
-- `/track_wallet <address>`: Start tracking a Solana wallet address
+- `/track_wallet `: Start tracking a Solana wallet address
 - `/my_wallets`: List all wallets being tracked by the user
 - `/remove_wallet <address>`: Stop tracking a specific wallet
 - `/track_token <symbol/address>`: Track a token for price movement alerts
