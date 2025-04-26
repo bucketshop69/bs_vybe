@@ -92,6 +92,47 @@ port.on('message', async (message) => {
                 });
                 break;
 
+            case 'SEND_PRICE_ALERT_NOTIFICATION':
+                console.log('[TelegramWorker] Received SEND_PRICE_ALERT_NOTIFICATION:', message.payload);
+                const { payload } = message;
+
+                if (!payload || !Array.isArray(payload.userIds) || payload.userIds.length === 0) {
+                    console.warn('[TelegramWorker] Invalid or missing user IDs in alert payload. Skipping.');
+                    return;
+                }
+
+                let formattedMessage = '🚨 **Price Alert!** 🚨\n\n';
+                const tokenSymbol = payload.tokenSymbol || 'Unknown Token';
+                const currentPrice = typeof payload.currentPrice === 'number' ? payload.currentPrice.toFixed(6) : 'N/A';
+
+                if (payload.alertType === 'target') {
+                    const targetPrice = typeof payload.targetPrice === 'number' ? payload.targetPrice.toFixed(6) : 'N/A';
+                    const direction = payload.isAboveTarget ? 'above' : 'below';
+                    formattedMessage += `Token *${tokenSymbol}* crossed ${direction} target of *$${targetPrice}*\n`;
+                    formattedMessage += `Current Price: *$${currentPrice}*`;
+                } else if (payload.alertType === 'general') {
+                    const percentChange = typeof payload.percentChange === 'number' ? payload.percentChange.toFixed(2) : 'N/A';
+                    const sign = payload.percentChange >= 0 ? '+' : '';
+                    formattedMessage += `Token *${tokenSymbol}* changed by *${sign}${percentChange}%*\n`;
+                    formattedMessage += `Current Price: *$${currentPrice}*`;
+                } else {
+                    formattedMessage += `Token *${tokenSymbol}* updated.\nCurrent Price: *$${currentPrice}*`;
+                    console.warn(`[TelegramWorker] Unknown alertType: ${payload.alertType}`);
+                }
+
+                // Send the message to each relevant user
+                for (const userId of payload.userIds) {
+                    try {
+                        console.log(`[TelegramWorker] Sending alert to user ${userId}`);
+                        await bot.sendMessage(userId, formattedMessage, { parse_mode: 'Markdown' });
+                    } catch (error: any) {
+                        // Handle potential errors like user blocking the bot
+                        console.error(`[TelegramWorker] Failed to send alert to user ${userId}:`, error.message || error);
+                        // Consider adding logic here to mark the user as inactive or handle specific error codes
+                    }
+                }
+                break;
+
             default:
                 // Skip DB_RESPONSE messages as they're handled separately
                 if (message.type !== 'DB_RESPONSE') {

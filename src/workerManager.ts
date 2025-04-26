@@ -175,6 +175,10 @@ export class WorkerManager extends EventEmitter {
      * Handle messages from workers
      */
     private handleWorkerMessage(type: WorkerType, message: any): void {
+        // --- BEGIN ADDED LOG ---
+        console.log(`[Manager] Received message from ${type} worker:`, message?.type);
+        // --- END ADDED LOG ---
+
         // Handle DB requests from workers
         if (message.type === 'DB_REQUEST' && message.operation) {
             this.handleDatabaseRequest(type, message);
@@ -194,9 +198,16 @@ export class WorkerManager extends EventEmitter {
 
             // Check if all workers are ready
             this.checkAllWorkersReady();
+            return; // Return after handling WORKER_READY
         }
 
-        // Handle other message types
+        // --- BEGIN ADDED LOG for specific events ---
+        if (message.type === 'PRICE_UPDATE' || message.type === 'PRICE_ALERT') {
+            console.log(`[Manager] Processing ${message.type} from ${type} worker. Data:`, message);
+        }
+        // --- END ADDED LOG ---
+
+        // Handle other message types by emitting them
         this.emit(`${type}_message`, message);
     }
 
@@ -315,22 +326,34 @@ export class WorkerManager extends EventEmitter {
     }
 
     /**
-     * Setup price update listeners for the token price worker
+     * Set up listener for price updates from the TokenPriceWorker
      */
     public setupPriceUpdateListener(callback: (data: any) => void): void {
-        this.on(`${WorkerType.TOKEN_PRICE}_message`, (message: any) => {
+        // --- BEGIN ADDED LOG ---
+        console.log('[Manager] Setting up PriceUpdateListener...');
+        // --- END ADDED LOG ---
+        this.on(WorkerType.TOKEN_PRICE + '_message', (message) => {
             if (message.type === 'PRICE_UPDATE') {
-                callback(message.data);
+                // --- BEGIN ADDED LOG ---
+                console.log('[Manager] Emitting PRICE_UPDATE event to main thread listener.');
+                // --- END ADDED LOG ---
+                callback(message);
             }
         });
     }
 
     /**
-     * Setup price alert listeners for the token price worker
+     * Set up listener for price alerts from the TokenPriceWorker
      */
     public setupPriceAlertListener(callback: (alertType: string, token: any, data: any) => void): void {
-        this.on(`${WorkerType.TOKEN_PRICE}_message`, (message: any) => {
+        // --- BEGIN ADDED LOG ---
+        console.log('[Manager] Setting up PriceAlertListener...');
+        // --- END ADDED LOG ---
+        this.on(WorkerType.TOKEN_PRICE + '_message', (message) => {
             if (message.type === 'PRICE_ALERT') {
+                // --- BEGIN ADDED LOG ---
+                console.log('[Manager] Emitting PRICE_ALERT event to main thread listener.');
+                // --- END ADDED LOG ---
                 callback(message.alertType, message.token, message.data);
             }
         });

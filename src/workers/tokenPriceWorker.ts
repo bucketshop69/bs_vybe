@@ -82,6 +82,7 @@ port.on('message', (message) => {
 
 // Forward price updates to main thread
 function forwardPriceUpdate(token: any, changeData: any) {
+    console.log(`[Worker] Forwarding PRICE_UPDATE for ${token?.symbol || 'Unknown Token'}. Data:`, { token, changeData });
     port.postMessage({
         type: 'PRICE_UPDATE',
         token,
@@ -92,6 +93,7 @@ function forwardPriceUpdate(token: any, changeData: any) {
 
 // Forward price alerts to main thread
 async function forwardPriceAlert(alertType: string, token: any, data: any): Promise<void> {
+    console.log(`[Worker] Forwarding PRICE_ALERT (${alertType}) for ${token?.symbol || 'Unknown Token'}. Data:`, { alertType, token, data });
     port.postMessage({
         type: 'PRICE_ALERT',
         alertType,

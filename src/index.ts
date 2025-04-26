@@ -40,18 +40,58 @@ async function startApp() {
         console.log('Initializing token prices...');
         await workerManager.initializeTokenPrices();
 
-        // Start the token price service
-        console.log('Starting token price service...');
-        await workerManager.startTokenPriceService();
-
         // Set up price update and alert listeners
+        console.log('Setting up price event listeners...');
         workerManager.setupPriceUpdateListener((data) => {
             console.log('Price update received:', data);
+            // TODO: Add logic here to potentially forward updates (e.g., to Telegram users requesting live prices)
         });
 
         workerManager.setupPriceAlertListener((alertType, token, data) => {
-            console.log(`Price alert (${alertType}) received for ${token.symbol}:`, data);
+            console.log(`[Index] Price alert (${alertType}) received for ${token?.symbol}. Data:`, data);
+
+            // --- BEGIN: Construct and send alert notification message --- 
+            try {
+                let userIds: number[] = [];
+                const payload: any = {
+                    alertType: alertType,
+                    tokenSymbol: token?.symbol,
+                    currentPrice: token?.current_price,
+                };
+
+                if (alertType === 'target' && data?.userAlert?.user_id) {
+                    userIds = [data.userAlert.user_id];
+                    payload.targetPrice = data.userAlert.target_price;
+                    payload.isAboveTarget = data.userAlert.is_above_target; // Include direction for better message formatting
+                } else if (alertType === 'general' && Array.isArray(data?.userIds) && data.userIds.length > 0) {
+                    userIds = data.userIds;
+                    payload.percentChange = data.percentChange;
+                    payload.previousPrice = data.previousPrice;
+                } else {
+                    console.warn('[Index] Could not determine target user IDs for price alert. Skipping notification.', { alertType, token, data });
+                    return; // Don't proceed if no valid recipients
+                }
+
+                payload.userIds = userIds;
+
+                // Construct the message to send to the Telegram worker
+                const message = {
+                    type: 'SEND_PRICE_ALERT_NOTIFICATION',
+                    payload: payload
+                };
+
+                console.log(`[Index] Sending alert message to Telegram worker:`, message);
+                workerManager.sendToWorker(WorkerType.TELEGRAM, message);
+
+            } catch (error) {
+                console.error('[Index] Error processing price alert for notification:', error, { alertType, token, data });
+            }
+            // --- END: Construct and send alert notification message ---
         });
+
+        // Start the token price service
+        console.log('Starting token price service...');
+        await workerManager.startTokenPriceService();
 
         // Start the Wallet Activity worker
         console.log('Starting Wallet Activity worker...');
