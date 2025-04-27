@@ -4,7 +4,7 @@ import {
     initializeTokenPriceCache,
     addPriceHistoryEntry,
     getAllTokenPrices,
-    getTokenSubscribers,
+    getAllUserIds,
     getActiveAlertsForToken,
     markAlertAsTriggered,
     UserPriceAlert
@@ -30,6 +30,13 @@ const tokenPriceHistory: {
 
 // Maximum history points to keep per token (1 point per minute, 60 points = 1 hour of data)
 const MAX_HISTORY_POINTS = 60;
+
+// State for General Alert Noise Reduction
+interface GeneralAlertState {
+    direction: 'up' | 'down' | 'none'; // Which threshold was last crossed
+    notifiedPrice: number;          // Price when the last notification for this direction was sent
+}
+const generalAlertState: { [mintAddress: string]: GeneralAlertState } = {};
 
 /**
  * Add a new price point to the in-memory history
@@ -294,9 +301,21 @@ async function processTokenUpdate(
     console.log(`[Service] Processing update for ${token.symbol} (Mint: ${token.mint_address})`);
 
     const mintAddress = token.mint_address;
+
+    // Step 1.1: Update database with latest price data (Fix Data Saving)
+    // Ensure the token object has the correct 'now' timestamp from vybeApi
+    try {
+        await initializeTokenPriceCache(db, token);
+        // console.log(`[Service] Updated token_prices table for ${token.symbol}`); // Optional: debug logging
+    } catch (error) {
+        console.error(`[Service] Failed to update token_prices table for ${token.symbol}:`, error);
+        // Decide if we should continue processing or return
+        // For now, let's continue, but log the error
+    }
+
     const previousPrice = previousPrices[mintAddress] ?? 0;
 
-    // Store current price data 
+    // Store current price data in *in-memory* history (used for other features potentially)
     addPriceHistoryPoint(mintAddress, token.current_price, Math.floor(Date.now() / 1000));
 
     // Skip alert processing if we don't have a valid previous price
@@ -310,10 +329,7 @@ async function processTokenUpdate(
 
     console.log(`[Service] Calculated change for ${token.symbol}: ${percentChange.toFixed(2)}% (Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)})`);
 
-    // Store the current price in the map for the *next* check (if this function gets called again in a loop)
-    previousPrices[mintAddress] = token.current_price;
-
-    // Call the price update callback if registered
+    // Call the price update callback if registered (used by workers/UI?)
     if (priceUpdateCallback) {
         console.log(`[Service] Firing price update callback for ${token.symbol}`);
         priceUpdateCallback(token, {
@@ -322,29 +338,57 @@ async function processTokenUpdate(
         });
     }
 
-    // Check for target price alerts first
+    // Check for target price alerts first (user-specific)
     await checkPriceTargets(db, token, previousPrice);
 
-    // Check if change exceeds threshold for general alerts
+    // --- General Alert Logic ---
+    const threshold = PRICE_ALERT_CONFIG.generalAlertThresholdPercent;
     const absChange = Math.abs(percentChange);
-    if (absChange >= PRICE_ALERT_CONFIG.generalAlertThresholdPercent) {
-        console.log(`[Service] Checking for general price change alert for ${token.symbol} (${percentChange.toFixed(2)}%)`);
-        // Get all users subscribed to this token
-        const subscribers = await getTokenSubscribers(db, mintAddress);
+    let shouldTriggerGeneralAlert = false;
+    let alertDirection: 'up' | 'down' | 'none' = 'none';
 
-        if (subscribers.length > 0) {
-            console.log(`[Service] !!! General Alert Triggered for ${token.symbol}: Change ${percentChange.toFixed(2)}% exceeds threshold ${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%. Notifying ${subscribers.length} subscribers.`);
+    // Step 2.1: Implement Stateful Triggering (Noise Reduction)
+    const currentState = generalAlertState[mintAddress] || { direction: 'none', notifiedPrice: 0 };
+
+    if (percentChange >= threshold && currentState.direction !== 'up') {
+        console.log(`[Service] General Alert Condition Met (UP) for ${token.symbol}: ${percentChange.toFixed(2)}% >= ${threshold}%`);
+        shouldTriggerGeneralAlert = true;
+        alertDirection = 'up';
+        generalAlertState[mintAddress] = { direction: 'up', notifiedPrice: token.current_price };
+    } else if (percentChange <= -threshold && currentState.direction !== 'down') {
+        console.log(`[Service] General Alert Condition Met (DOWN) for ${token.symbol}: ${percentChange.toFixed(2)}% <= -${threshold}%`);
+        shouldTriggerGeneralAlert = true;
+        alertDirection = 'down';
+        generalAlertState[mintAddress] = { direction: 'down', notifiedPrice: token.current_price };
+    } else if (absChange < threshold && currentState.direction !== 'none') {
+        console.log(`[Service] General Alert Reset for ${token.symbol}: Price returned within +/-${threshold}%`);
+        // Reset state when price comes back within threshold
+        generalAlertState[mintAddress] = { direction: 'none', notifiedPrice: 0 };
+        shouldTriggerGeneralAlert = false; // Ensure no alert is sent on reset
+    }
+    // else: Price is still above/below threshold but we already notified for this direction, OR price is within threshold. Do nothing.
+
+    if (shouldTriggerGeneralAlert && alertCallback) {
+        console.log(`[Service] Preparing to fire general alert callback for ${token.symbol} (Direction: ${alertDirection})`);
+
+        // Step 1.3: Get ALL users for general alerts
+        const allUserIds = await getAllUserIds(db);
+
+        if (allUserIds.length > 0) {
+            console.log(`[Service] !!! General Alert Triggered for ${token.symbol}: Change ${percentChange.toFixed(2)}%. Notifying ${allUserIds.length} potential users.`);
 
             // Notify through callback
-            if (alertCallback) {
-                console.log(`[Service] Firing general alert callback for ${token.symbol}`);
-                await alertCallback('general', token, {
-                    percentChange,
-                    previousPrice: previousPrice,
-                    userIds: subscribers
-                });
-            }
+            await alertCallback('general', token, {
+                percentChange,
+                previousPrice: previousPrice,
+                userIds: allUserIds // Send to all users
+            });
+
+        } else {
+            console.log(`[Service] General Alert Triggered for ${token.symbol} but no users found in the database.`);
         }
+    } else if (shouldTriggerGeneralAlert && !alertCallback) {
+        console.warn(`[Service] General Alert Triggered for ${token.symbol} but no alertCallback is registered.`);
     }
 }
 

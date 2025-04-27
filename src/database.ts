@@ -242,6 +242,17 @@ export async function removeTrackedWallet(db: any, userId: number, walletAddress
     return true;
 }
 
+// Get all unique user IDs from the users table
+export async function getAllUserIds(db: any): Promise<number[]> {
+    try {
+        const rows: { user_id: number }[] = await db.all('SELECT DISTINCT user_id FROM users');
+        return rows.map((row: { user_id: number }) => row.user_id);
+    } catch (error) {
+        console.error('Error getting all user IDs:', error);
+        return [];
+    }
+}
+
 // =====================================================================
 // Token Price Alert Functions
 // =====================================================================

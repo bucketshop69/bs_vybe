@@ -405,7 +405,15 @@ const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
                 }
 
                 const queued = queueNotification(userId, message);
-                if (queued) queuedCount++;
+                if (queued) {
+                    queuedCount++;
+                    // Log the successful queuing of the notification
+                    const currentTime = new Date().toLocaleString(); // Human-readable local time
+                    console.log(
+                        `[Price Alert Sent] Time: ${currentTime}, User: ${userId}, Token: ${token.symbol}, ` +
+                        `Current Price: ${token.current_price.toFixed(6)}, Previous Price: ${data.previousPrice.toFixed(6)}`
+                    );
+                }
             }
 
             console.log(`Queued general price alerts for ${token.symbol} to ${queuedCount}/${data.userIds.length} users`);

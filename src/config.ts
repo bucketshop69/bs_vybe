@@ -47,13 +47,14 @@ export const TRACKED_TOKENS = [
     'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // BONK
     '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
     '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',
-    'KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS'
+    'KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS',
+    'CDBdbNqmrLu1PcgjrFG52yxg71QnFhBZcUE6PSFdbonk'
 ];
 
 // Price alert configuration
 export const PRICE_ALERT_CONFIG = {
-    pollingIntervalMs: 60 * 1000,           // 1 minute in milliseconds
-    generalAlertThresholdPercent: 1,        // 3% change triggers general alert
+    pollingIntervalMs: 360 * 1000,           // 1 minute in milliseconds
+    generalAlertThresholdPercent: 3,        // 3% change triggers general alert
     maxAlertsPerUser: 5,                    // Maximum 5 alerts per user
     tooCloseThresholdPercent: 1,            // Target within 2% of current price is too close
     tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
