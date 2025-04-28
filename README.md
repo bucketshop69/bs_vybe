@@ -76,3 +76,24 @@ The following commands allow you to manage your personal price target alerts usi
 **Note:**
 - User-set alerts (`/set_alert`) are personal and only notify you.
 - General alerts are automatic broadcasts about significant moves in globally tracked tokens.
+
+## Deployment
+
+### Deploying to Render (Free Tier)
+
+This bot can be easily deployed to Render.com's free tier:
+
+1. Fork or push this repository to your GitHub account.
+
+2. Sign up for a free account on [Render](https://render.com) and connect your GitHub account.
+
+3. Create a new Web Service:
+   - Select your repository
+   - Set the Build Command: `npm install && npm run build`
+   - Set the Start Command: `node dist/index.js`
+   - Select the Free plan
+
+4. Add the following environment variables:
+   - `VYBE_TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
+   - `VYBE_KEY`: Your API key for Vybe Network
+   - `DATABASE_PATH`: `/data/vybe_bot.db`

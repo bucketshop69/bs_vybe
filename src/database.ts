@@ -28,8 +28,11 @@ export interface UserPriceAlert {
 
 // Initialize the database and create necessary tables
 export async function initializeDatabase() {
+    const dbPath = process.env.DATABASE_PATH || './vybe_bot.db';
+    console.log(`Initializing database at: ${dbPath}`);
+
     const db = await open({
-        filename: './vybe_bot.db',
+        filename: dbPath,
         driver: sqlite3.Database
     });
 

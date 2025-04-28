@@ -8,6 +8,15 @@ import WorkerManager, { WorkerType, WorkerManagerEvent } from './workerManager';
 async function startApp() {
     console.log('Starting Vybe Bot application with worker threads...');
 
+    // Validate required environment variables
+    if (!process.env.VYBE_TELEGRAM_BOT_TOKEN) {
+        throw new Error('FATAL: VYBE_TELEGRAM_BOT_TOKEN is required in .env');
+    }
+
+    if (!process.env.VYBE_KEY) {
+        throw new Error('FATAL: VYBE_KEY is required in .env');
+    }
+
     // Initialize the database
     console.log('Initializing database...');
     const db = await initializeDatabase();
