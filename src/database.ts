@@ -30,21 +30,44 @@ export interface UserPriceAlert {
 
 // Initialize the database and create necessary tables
 export async function initializeDatabase() {
-    const dbPath = process.env.DATABASE_PATH || './vybe_bot.db';
-    console.log(`Initializing database at: ${dbPath}`);
+    // Try using the environment variable, but have fallbacks
+    let dbPath = process.env.DATABASE_PATH;
 
-    // Ensure the directory exists
-    try {
-        const dbDir = path.dirname(dbPath);
-        if (dbDir !== '.' && !fs.existsSync(dbDir)) {
-            console.log(`Creating database directory: ${dbDir}`);
-            fs.mkdirSync(dbDir, { recursive: true });
-        }
-    } catch (error) {
-        console.error(`Error creating database directory: ${error}`);
+    if (!dbPath) {
+        dbPath = './vybe_bot.db'; // Default to local directory
     }
 
+    console.log(`Attempting to initialize database at: ${dbPath}`);
+
+    // Check if the directory is accessible/writable before proceeding
     try {
+        const dbDir = path.dirname(dbPath);
+
+        // Skip directory creation for current dir
+        if (dbDir !== '.' && !fs.existsSync(dbDir)) {
+            try {
+                console.log(`Creating database directory: ${dbDir}`);
+                fs.mkdirSync(dbDir, { recursive: true });
+                console.log(`Successfully created directory: ${dbDir}`);
+            } catch (dirError: any) {
+                console.error(`Error creating directory ${dbDir}: ${dirError.message}`);
+
+                // If we can't create the specified directory, fall back to using the current directory
+                console.log(`Falling back to current directory for database`);
+                dbPath = './vybe_bot.db';
+            }
+        }
+
+        // Final check if directory exists and is writable
+        const finalDir = path.dirname(dbPath);
+        if (finalDir !== '.' && !fs.existsSync(finalDir)) {
+            console.error(`Directory ${finalDir} still doesn't exist, using current directory`);
+            dbPath = './vybe_bot.db';
+        }
+
+        console.log(`Final database path: ${dbPath}`);
+
+        // Open the database
         const db = await open({
             filename: dbPath,
             driver: sqlite3.Database

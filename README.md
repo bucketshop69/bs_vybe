@@ -92,6 +92,7 @@ This bot can be easily deployed to Render.com's free tier:
    - Name: `data`
    - Mount Path: `/data`
    - Size: 1 GB (minimum)
+   - Note: Make sure to wait for disk creation to complete before proceeding
 
 4. Create a new Web Service:
    - Select your repository
@@ -105,12 +106,18 @@ This bot can be easily deployed to Render.com's free tier:
    - `VYBE_KEY`: Your API key for Vybe Network
    - `DATABASE_PATH`: `/data/vybe_bot.db`
 
-6. Under "Advanced" settings, attach the disk you created in step 3 to this service.
+6. Under "Advanced" settings, attach the disk you created in step 3 to this service:
+   - Find the "Disks" section
+   - Click "Attach Disk"
+   - Select the disk you created earlier
+   - Ensure the mount path is set to `/data`
 
 7. Click "Create Web Service" to deploy.
 
 **Troubleshooting**:
-- If you see a `SQLITE_CANTOPEN` error, ensure you've created and attached the disk properly.
-- Free Render services "spin down" after inactivity, which may cause a slight delay on the first interaction.
-- The database file will be stored on the persistent disk to ensure data is preserved between deployments.
-- Render will automatically redeploy when you push changes to your repository.
+- If you see a `SQLITE_CANTOPEN` or permission errors, check if the disk is properly attached to your service
+- If the application starts using `./vybe_bot.db` instead of `/data/vybe_bot.db`, this indicates a fallback due to permission issues with the disk
+- You can verify disk attachment in your service settings under the "Disks" section
+- Free Render services "spin down" after inactivity, which may cause a slight delay on the first interaction
+- The database file will be stored on the persistent disk to ensure data is preserved between deployments
+- Render will automatically redeploy when you push changes to your repository
