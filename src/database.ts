@@ -2,6 +2,8 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { walletLog } from './logger';
 import { TRACKED_TOKENS, PRICE_ALERT_CONFIG } from './config';
+import fs from 'fs';
+import path from 'path';
 
 // Token price interfaces
 export interface TokenPrice {
@@ -31,104 +33,120 @@ export async function initializeDatabase() {
     const dbPath = process.env.DATABASE_PATH || './vybe_bot.db';
     console.log(`Initializing database at: ${dbPath}`);
 
-    const db = await open({
-        filename: dbPath,
-        driver: sqlite3.Database
-    });
-
-    // Create users table if it doesn't exist
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    // Create tracked_wallets table
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS tracked_wallets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            wallet_address TEXT NOT NULL,
-            label TEXT,
-            last_notified_tx_signature TEXT,
-            last_processed_block_time INTEGER, -- Unix timestamp (seconds since epoch)
-            tracking_started_at INTEGER, -- Unix timestamp when tracking began
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(user_id),
-            UNIQUE(user_id, wallet_address)
-        )
-    `);
-
-    // Add columns if they don't exist (for upgrading existing databases)
+    // Ensure the directory exists
     try {
-        await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN last_processed_block_time INTEGER;`);
-        console.log('Added last_processed_block_time column to tracked_wallets table');
-    } catch (e) {
-        // Column likely already exists
+        const dbDir = path.dirname(dbPath);
+        if (dbDir !== '.' && !fs.existsSync(dbDir)) {
+            console.log(`Creating database directory: ${dbDir}`);
+            fs.mkdirSync(dbDir, { recursive: true });
+        }
+    } catch (error) {
+        console.error(`Error creating database directory: ${error}`);
     }
 
     try {
-        await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN tracking_started_at INTEGER;`);
-        console.log('Added tracking_started_at column to tracked_wallets table');
-    } catch (e) {
-        // Column likely already exists
+        const db = await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
+
+        // Create users table if it doesn't exist
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create tracked_wallets table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS tracked_wallets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                wallet_address TEXT NOT NULL,
+                label TEXT,
+                last_notified_tx_signature TEXT,
+                last_processed_block_time INTEGER, -- Unix timestamp (seconds since epoch)
+                tracking_started_at INTEGER, -- Unix timestamp when tracking began
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id),
+                UNIQUE(user_id, wallet_address)
+            )
+        `);
+
+        // Add columns if they don't exist (for upgrading existing databases)
+        try {
+            await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN last_processed_block_time INTEGER;`);
+            console.log('Added last_processed_block_time column to tracked_wallets table');
+        } catch (e) {
+            // Column likely already exists
+        }
+
+        try {
+            await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN tracking_started_at INTEGER;`);
+            console.log('Added tracking_started_at column to tracked_wallets table');
+        } catch (e) {
+            // Column likely already exists
+        }
+
+        // Create token price tracking tables
+
+        // Token price cache table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS token_prices (
+                mint_address TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                name TEXT NOT NULL,
+                current_price REAL,
+                last_update_time INTEGER,  -- Unix timestamp
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Price history for tracked tokens
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS token_price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mint_address TEXT NOT NULL,
+                price REAL NOT NULL,
+                timestamp INTEGER NOT NULL,  -- Unix timestamp
+                FOREIGN KEY(mint_address) REFERENCES token_prices(mint_address)
+            )
+        `);
+
+        // User specific price alerts
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS user_price_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                mint_address TEXT NOT NULL,
+                target_price REAL NOT NULL,
+                is_above_target BOOLEAN NOT NULL,  -- true if waiting for price to go above target
+                is_triggered BOOLEAN DEFAULT FALSE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        `);
+
+        // Global subscriptions for general price movement alerts
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS token_alert_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                mint_address TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id),
+                UNIQUE(user_id, mint_address)
+            )
+        `);
+
+        return db;
+    } catch (error) {
+        console.error(`Error initializing database: ${error}`);
+        throw error;
     }
-
-    // Create token price tracking tables
-
-    // Token price cache table
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS token_prices (
-            mint_address TEXT PRIMARY KEY,
-            symbol TEXT NOT NULL,
-            name TEXT NOT NULL,
-            current_price REAL,
-            last_update_time INTEGER,  -- Unix timestamp
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    // Price history for tracked tokens
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS token_price_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mint_address TEXT NOT NULL,
-            price REAL NOT NULL,
-            timestamp INTEGER NOT NULL,  -- Unix timestamp
-            FOREIGN KEY(mint_address) REFERENCES token_prices(mint_address)
-        )
-    `);
-
-    // User specific price alerts
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS user_price_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            mint_address TEXT NOT NULL,
-            target_price REAL NOT NULL,
-            is_above_target BOOLEAN NOT NULL,  -- true if waiting for price to go above target
-            is_triggered BOOLEAN DEFAULT FALSE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(user_id)
-        )
-    `);
-
-    // Global subscriptions for general price movement alerts
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS token_alert_subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            mint_address TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(user_id),
-            UNIQUE(user_id, mint_address)
-        )
-    `);
-
-    return db;
 }
 
 // Get count of wallets tracked by a user

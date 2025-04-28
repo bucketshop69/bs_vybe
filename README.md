@@ -87,29 +87,30 @@ This bot can be easily deployed to Render.com's free tier:
 
 2. Sign up for a free account on [Render](https://render.com) and connect your GitHub account.
 
-3. Create a new Web Service:
+3. **IMPORTANT**: Add a persistent disk BEFORE creating the service:
+   - In your Render dashboard, go to "Disks" in the left sidebar and create a new disk
+   - Name: `data`
+   - Mount Path: `/data`
+   - Size: 1 GB (minimum)
+
+4. Create a new Web Service:
    - Select your repository
    - Build Command: `npm install && npm run build`
    - Start Command: `npm start`
    - Select the Free plan
    - Root Directory: `/` (the repository root)
 
-4. Add the following environment variables:
+5. Add the following environment variables:
    - `VYBE_TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
    - `VYBE_KEY`: Your API key for Vybe Network
    - `DATABASE_PATH`: `/data/vybe_bot.db`
 
-5. Add a persistent disk:
-   - Under "Advanced" settings, find the "Disks" section
-   - Add a disk with:
-     - Name: `data`
-     - Mount Path: `/data`
-     - Size: 1 GB (minimum)
+6. Under "Advanced" settings, attach the disk you created in step 3 to this service.
 
-6. Click "Create Web Service" to deploy.
+7. Click "Create Web Service" to deploy.
 
 **Troubleshooting**:
-- If you encounter `Error: Cannot find module '/opt/render/project/src/dist/index.js'`, make sure the Root Directory is set to `/` in your Render settings.
+- If you see a `SQLITE_CANTOPEN` error, ensure you've created and attached the disk properly.
 - Free Render services "spin down" after inactivity, which may cause a slight delay on the first interaction.
 - The database file will be stored on the persistent disk to ensure data is preserved between deployments.
 - Render will automatically redeploy when you push changes to your repository.
