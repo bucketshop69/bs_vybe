@@ -89,11 +89,27 @@ This bot can be easily deployed to Render.com's free tier:
 
 3. Create a new Web Service:
    - Select your repository
-   - Set the Build Command: `npm install && npm run build`
-   - Set the Start Command: `node dist/index.js`
+   - Build Command: `npm install && npm run build`
+   - Start Command: `node dist/index.js`
    - Select the Free plan
+   - **Important**: Set the Root Directory to `/` (the repository root)
 
 4. Add the following environment variables:
    - `VYBE_TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
    - `VYBE_KEY`: Your API key for Vybe Network
    - `DATABASE_PATH`: `/data/vybe_bot.db`
+
+5. Add a persistent disk:
+   - Under "Advanced" settings, find the "Disks" section
+   - Add a disk with:
+     - Name: `data`
+     - Mount Path: `/data`
+     - Size: 1 GB (minimum)
+
+6. Click "Create Web Service" to deploy.
+
+**Troubleshooting**:
+- If you encounter `Error: Cannot find module '/opt/render/project/src/dist/index.js'`, make sure the Root Directory is set to `/` in your Render settings.
+- Free Render services "spin down" after inactivity, which may cause a slight delay on the first interaction.
+- The database file will be stored on the persistent disk to ensure data is preserved between deployments.
+- Render will automatically redeploy when you push changes to your repository.
