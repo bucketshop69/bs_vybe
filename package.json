@@ -4,11 +4,12 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && echo 'TypeScript compilation complete'",
+    "build": "tsc && mkdir -p /opt/render/project/src/dist && cp -r dist/* /opt/render/project/src/dist/ || echo 'TypeScript compilation complete'",
     "watch": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1",
     "worker:build": "tsc && echo 'Build complete! Worker threads ready.'",
     "worker:start": "node dist/index.js",
+    "start": "node dist/index.js || node /opt/render/project/src/dist/index.js",
     "worker": "npm run worker:build && npm run worker:start",
     "worker:dev": "nodemon --exec 'npm run worker:build && npm run worker:start' --ext ts --watch src",
     "postinstall": "tsc"

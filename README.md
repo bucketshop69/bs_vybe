@@ -90,9 +90,9 @@ This bot can be easily deployed to Render.com's free tier:
 3. Create a new Web Service:
    - Select your repository
    - Build Command: `npm install && npm run build`
-   - Start Command: `node dist/index.js`
+   - Start Command: `npm start`
    - Select the Free plan
-   - **Important**: Set the Root Directory to `/` (the repository root)
+   - Root Directory: `/` (the repository root)
 
 4. Add the following environment variables:
    - `VYBE_TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
