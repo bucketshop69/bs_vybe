@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Updated Title -->
+    <title>Solana Price Board Simulation v5 (with Transform)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            max-width: 100%;
+            /* Make canvas responsive */
+            height: auto;
+            /* Maintain aspect ratio */
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Updated Heading -->
+    <h1>Solana Price Board Simulation (Attempt 5 - Applying Transform)</h1>
+
+    <!-- The Canvas element where the final image will be drawn -->
+    <canvas id="priceCanvas"></canvas>
+
+    <script>
+        // --- Configuration ---
+        const canvas = document.getElementById('priceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Mock Data (Simulating API Response) ---
+        const mockTokenData = [
+            { symbol: 'BONK', name: 'Bonk', priceChange24h: 6.2, priceChange7d: 20.5 },
+            { symbol: 'JUP', name: 'Jupiter', priceChange24h: 3.8, priceChange7d: 15.3 },
+            { symbol: 'WIF', name: 'dogwifhat', priceChange24h: -2.4, priceChange7d: 43.6 },
+            { symbol: 'PYTH', name: 'Pyth Network', priceChange24h: 0.5, priceChange7d: 8.1 },
+            { symbol: 'RAY', name: 'Raydium', priceChange24h: 4.1, priceChange7d: 10.4 },
+            { symbol: 'ORCA', name: 'Orca', priceChange24h: 1.9, priceChange7d: -2.0 },
+            { symbol: 'HNT', name: 'Helium', priceChange24h: -3.3, priceChange7d: -5.6 },
+            { symbol: 'MNDE', name: 'Marinade', priceChange24h: 7.4, priceChange7d: 17.1 },
+            { symbol: 'JTO', name: 'Jito', priceChange24h: 5.0, priceChange7d: 26.8 },
+            { symbol: 'SLERF', name: 'SLERF', priceChange24h: -1.8, priceChange7d: 4.7 },
+        ];
+
+        // --- Image Loading ---
+        const baseImage = new Image();
+        // IMPORTANT: Make sure 'blank_board.png' matches your file name
+        baseImage.src = 'blank_board.png'; // Using .png as you had it
+
+        baseImage.onload = () => {
+            console.log('Base image loaded successfully.');
+            // Set canvas size to match the loaded image
+            canvas.width = baseImage.width;
+            canvas.height = baseImage.height;
+
+            // Start the drawing process
+            drawPriceBoard();
+        };
+
+        baseImage.onerror = (err) => {
+            // Log the actual error event if possible
+            console.error("Error loading base image:", err);
+            console.error("Make sure 'blank_board.png' exists in the same directory and the filename is correct.");
+            ctx.fillStyle = 'red';
+            ctx.font = '16px Arial';
+            ctx.fillText("Error loading base image! Check console.", 20, 40);
+        };
+
+        // --- Drawing Function ---
+        function drawPriceBoard() {
+            console.log('Drawing on canvas (Applying Transforms)...'); // Updated log
+
+            // 1. Draw the base image onto the canvas
+            ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+
+            // --- Parameters (Keep your best values) ---
+            const fontFamily = '"Arial", sans-serif';
+            const baseFontSize = 35;
+            const titleFontSize = 40;
+            const headerFontSize = 23;
+            const baseTextColor = '#E0E0E0';
+            const positiveColor = '#66BB6A';
+            const negativeColor = '#EF5350';
+            const startX = 530;
+            const startY = 280;
+            const colOffsets = { symbol: 0, change24h: 185, change7d: 345 };
+            const numberColumnWidth = 100;
+            const lineHeight = 65;
+            const headerYOffset = -68;
+            const titleYOffset = -128;
+            const headerLineSpacing = 27;
+            // --- Shear amounts ---
+            const tableShearAmount = -0.07; // Keep the value you liked for the table
+            // *** ADJUST THIS VALUE FOR THE TITLE'S TILT ***
+            const titleShearAmount = -0.12; // Start with slightly more shear for the title
+
+
+            // === Draw Main Title with its OWN Transform ===
+            ctx.save(); // Save state BEFORE title transform
+
+            // Apply specific transform FOR THE TITLE ONLY
+            // Experiment with titleShearAmount and maybe add translation (e, f) if needed
+            // Example adding slight vertical offset (f = -5) for title:
+            // ctx.transform(1, 0, titleShearAmount, 1, 0, -5);
+            ctx.transform(1, 0, titleShearAmount, 1, 0, 0); // Just shear for now
+
+            // Set font and draw title
+            ctx.font = `bold ${titleFontSize}px ${fontFamily}`;
+            ctx.fillStyle = baseTextColor;
+            ctx.textAlign = 'center';
+            const tableCenterX = startX + (colOffsets.change7d + numberColumnWidth) / 2;
+            ctx.fillText('SOLANA COIN PRICES', tableCenterX, startY + titleYOffset);
+
+            ctx.restore(); // Restore state AFTER title drawing (removes title transform)
+            // === Title Drawing Complete ===
+
+
+            // === Apply Main Transform for Headers and Data ===
+            ctx.save(); // Save state BEFORE table transform
+
+            // Apply the main transform for the rest of the table
+            ctx.transform(1, 0, tableShearAmount, 1, 0, 0);
+            // Optional: Add translation here if needed for table positioning after shear
+            // ctx.transform(1, 0, tableShearAmount, 1, tx, ty);
+
+            // === Main Transform Applied ===
+
+
+            // 4. Draw Headers (Now drawn with tableShearAmount)
+            ctx.font = `bold ${headerFontSize}px ${fontFamily}`;
+            ctx.fillStyle = baseTextColor;
+
+            ctx.textAlign = 'left';
+            ctx.fillText('Coin', startX + colOffsets.symbol, startY + headerYOffset);
+
+            ctx.textAlign = 'right';
+            const header2X = startX + colOffsets.change24h + (numberColumnWidth / 2);
+            ctx.fillText('Price Change', header2X, startY + headerYOffset);
+            ctx.fillText('(24h)', header2X, startY + headerYOffset + headerLineSpacing);
+
+            const header3X = startX + colOffsets.change7d + (numberColumnWidth / 2);
+            ctx.fillText('Price Change', header3X, startY + headerYOffset);
+            ctx.fillText('(7d)', header3X, startY + headerYOffset + headerLineSpacing);
+
+
+            // 5. Draw Data Rows (Now drawn with tableShearAmount)
+            ctx.font = `${baseFontSize}px ${fontFamily}`;
+
+            mockTokenData.forEach((token, index) => {
+                const currentY = startY + (index * lineHeight);
+
+                ctx.fillStyle = baseTextColor;
+                ctx.textAlign = 'left';
+                ctx.fillText(token.symbol, startX + colOffsets.symbol, currentY);
+
+                ctx.textAlign = 'right';
+                const change24hText = `${token.priceChange24h >= 0 ? '+' : ''}${token.priceChange24h.toFixed(1)}%`;
+                ctx.fillStyle = token.priceChange24h >= 0 ? positiveColor : negativeColor;
+                ctx.fillText(change24hText, header2X, currentY);
+
+                const change7dText = `${token.priceChange7d >= 0 ? '+' : ''}${token.priceChange7d.toFixed(1)}%`;
+                ctx.fillStyle = token.priceChange7d >= 0 ? positiveColor : negativeColor;
+                ctx.fillText(change7dText, header3X, currentY);
+            });
+
+            // === Restore State AFTER Table Drawing ===
+            ctx.restore(); // Restore state saved before the table transform
+            // === State Restored ===
+
+            console.log('Drawing complete (with separate transforms).');
+        }
+
+
+    </script>
+
+</body>
+
+</html>

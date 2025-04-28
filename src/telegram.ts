@@ -16,6 +16,7 @@ import {
 import { getTokenPriceChange } from './tokenPriceService';
 import { PRICE_ALERT_CONFIG } from './config';
 import { sendTestPriceAlerts, estimateTimeToTarget, formatTimeEstimate, validatePriceTarget } from './tokenAlerts';
+import { generatePriceBoardImage } from './utils/imageGenerator';
 
 dotenv.config();
 
@@ -149,6 +150,37 @@ export function setupBot(db: any) {
             `• You can set up to ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts`,
             { parse_mode: 'HTML' }
         );
+    });
+
+    bot.onText(/\/prices/, async (msg: any) => {
+        // Ensure msg.chat exists (it always should for onText)
+        const chatId: number = msg.chat.id;
+        console.log(`Received /prices command from chat ID: ${chatId}`);
+
+        try {
+            // Optional: Notify user work is starting
+            await bot.sendChatAction(chatId, 'upload_photo');
+
+            console.log('Generating price board image...');
+            const imageBuffer: Buffer = await generatePriceBoardImage();
+            console.log('Image generated, sending photo...');
+
+            // Send the image buffer
+            await bot.sendPhoto(chatId, imageBuffer, {
+                caption: 'Latest Solana Token Prices ✨'
+                // You can add parse_mode: 'MarkdownV2' or 'HTML' if needed for the caption
+            });
+            console.log('Photo sent successfully.');
+
+        } catch (error: unknown) { // Catch unknown type first
+            console.error('Failed to handle /prices command:', error);
+            let errorMessage = '❌ Sorry, I couldn\'t generate the price image right now. Please try again later.';
+            if (error instanceof Error) {
+                errorMessage = `❌ Error generating image: ${error.message}`;
+            }
+            // Send error message to user
+            await bot.sendMessage(chatId, errorMessage);
+        }
     });
 
     // Handle /track_wallet command

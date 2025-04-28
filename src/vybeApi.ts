@@ -596,11 +596,3 @@ export async function getRecentSignaturesForWallet(walletAddress: string, limit:
         return [];
     }
 }
-
-// Run tests if this file is executed directly
-// if (require.main === module) {
-//     getRecentTransfersForWallet("7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C")
-//         .then(res => {
-//             console.log(res);
-//         })
-// } 
