@@ -295,28 +295,28 @@ export async function startPollingService(db: any) {
 }
 
 // Debug/Test section: Run a test of lightweight polling and spam filtering if this file is executed directly
-if (require.main === module) {
-    (async () => {
-        const testWallet = process.argv[2] || '7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C';
-        console.log(`\n[DEBUG] Testing lightweight polling and spam filtering for wallet: ${testWallet}`);
+// if (require.main === module) {
+//     (async () => {
+//         const testWallet = process.argv[2] || '7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C';
+//         console.log(`\n[DEBUG] Testing lightweight polling and spam filtering for wallet: ${testWallet}`);
 
-        // --- Debug Helius RPC signature fetch ---
-        const signatures = await getRecentSignaturesForWallet(testWallet, 10);
-        console.log(`[DEBUG] Latest signatures from Helius RPC for ${testWallet}:`);
-        console.log(signatures);
+//         // --- Debug Helius RPC signature fetch ---
+//         const signatures = await getRecentSignaturesForWallet(testWallet, 10);
+//         console.log(`[DEBUG] Latest signatures from Helius RPC for ${testWallet}:`);
+//         console.log(signatures);
 
-        // Simulate a user object for testing
-        const users = [
-            {
-                userId: 123456,
-                lastSig: null, // Set to a known signature to test skipping
-                lastBlockTime: null,
-                trackingStartedAt: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
-                createdAt: new Date(Date.now() - 86400 * 1000).toISOString()
-            }
-        ];
-        // Use an in-memory DB or mock as needed; here we pass null for demonstration
-        await checkSingleWalletActivity(null, testWallet, users);
-        console.log('[DEBUG] Test complete.');
-    })();
-} 
+//         // Simulate a user object for testing
+//         const users = [
+//             {
+//                 userId: 123456,
+//                 lastSig: null, // Set to a known signature to test skipping
+//                 lastBlockTime: null,
+//                 trackingStartedAt: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
+//                 createdAt: new Date(Date.now() - 86400 * 1000).toISOString()
+//             }
+//         ];
+//         // Use an in-memory DB or mock as needed; here we pass null for demonstration
+//         await checkSingleWalletActivity(null, testWallet, users);
+//         console.log('[DEBUG] Test complete.');
+//     })();
+// } 

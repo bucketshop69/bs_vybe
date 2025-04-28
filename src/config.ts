@@ -46,16 +46,36 @@ export const TRACKED_TOKENS = [
     'LAYER4xPpTCb3QL8S9u41EAhAX7mhBn8Q6xMTwY2Yzc',
     'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // BONK
     '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
-    '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',
     'KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS',
-    'CDBdbNqmrLu1PcgjrFG52yxg71QnFhBZcUE6PSFdbonk'
+    'CDBdbNqmrLu1PcgjrFG52yxg71QnFhBZcUE6PSFdbonk',
+    '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',
 ];
 
 // Price alert configuration
 export const PRICE_ALERT_CONFIG = {
-    pollingIntervalMs: 360 * 1000,           // 1 minute in milliseconds
-    generalAlertThresholdPercent: 3,        // 3% change triggers general alert
+    pollingIntervalMs: 3600 * 1000,           // 1h minute in milliseconds
+    generalAlertThresholdPercent: 2.5,        // 3% change triggers general alert
     maxAlertsPerUser: 5,                    // Maximum 5 alerts per user
     tooCloseThresholdPercent: 1,            // Target within 2% of current price is too close
     tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
 };
+
+
+export const KOLs_wallets = {
+    "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o": "Cented7",
+    "BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd": "vibed333",
+    "525LueqAyZJueCoiisfWy6nyh4MTvmF4X9jSqi6efXJT": "metaversejoji",
+    "JDd3hy3gQn2V982mi1zqhNqUw1GfV2UL6g76STojCJPN": "ratwizardx",
+    "73LnJ7G9ffBDjEBGgJDdgvLUhD5APLonKrNiHsKDCw5B": "waddles_eth",
+    "6LChaYRYtEYjLEHhzo4HdEmgNwu2aia8CM8VhR9wn6n7": "assasin_eth",
+    "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm": "Ga__ke",
+    "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj": "Euris_JT",
+    "GfXQesPe3Zuwg8JhAt6Cg8euJDTVx751enp9EQQmhzPH": "spunosounds",
+    "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf": "OrangeSBS",
+    "GM7Hrz2bDq33ezMtL6KGidSWZXMWgZ6qBuugkb5H8NvN": "beaverd",
+    "Av3xWHJ5EsoLZag6pr7LKbrGgLRTaykXomDD5kBhL9YQ": "Heyitsyolotv",
+    "8MaVa9kdt3NW4Q5HyNAm1X5LbR8PQRVDc1W8NMVK88D5": "daumeneth",
+    "3pZ59YENxDAcjaKa3sahZJBcgER4rGYi4v6BpPurmsGj": "kadenox",
+    "9Vk7pkBZ9KFJmzaPzNYjGedyz8qoKMQtnYyYi2AehNMT": "xelf_sol",
+    "HwRnKq7RPtKHvX9wyHsc1zvfHtGjPQa5tyZtGtbvfXE": "BitBoyJay",
+}

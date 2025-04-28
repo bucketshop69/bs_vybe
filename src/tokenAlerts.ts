@@ -2,6 +2,7 @@ import { bot } from './telegram';
 import { TokenPrice, UserPriceAlert } from './database';
 import { PriceAlertCallback, registerAlertCallback } from './tokenPriceService';
 import { PRICE_ALERT_CONFIG } from './config';
+import { userLog } from './logger';
 
 // Track when we last sent notifications to avoid spamming
 const lastAlertsSent: {
@@ -407,12 +408,13 @@ const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
                 const queued = queueNotification(userId, message);
                 if (queued) {
                     queuedCount++;
-                    // Log the successful queuing of the notification
-                    const currentTime = new Date().toLocaleString(); // Human-readable local time
-                    console.log(
-                        `[Price Alert Sent] Time: ${currentTime}, User: ${userId}, Token: ${token.symbol}, ` +
-                        `Current Price: ${token.current_price.toFixed(6)}, Previous Price: ${data.previousPrice.toFixed(6)}`
-                    );
+                    // Log the successful queuing to the user's file
+                    console.log(`[DEBUG] Reached userLog call for User ID: ${userId}`);
+                    userLog(userId, `[Price Alert Sent] Token: ${token.symbol}`, {
+                        currentPrice: token.current_price.toFixed(6),
+                        previousPrice: data.previousPrice.toFixed(6),
+                        percentChange: data.percentChange.toFixed(2)
+                    });
                 }
             }
 

@@ -66,6 +66,49 @@ export function walletLog(walletAddress: string, userId: number | null, message:
 }
 
 /**
+ * Appends a log entry to a user-specific log file.
+ * @param userId The user ID to log for.
+ * @param message The primary log message.
+ * @param data Optional structured data to include in the log.
+ */
+export function userLog(userId: number, message: string, data?: any) {
+    console.log(`[DEBUG] userLog called for User ID: ${userId}`);
+    try {
+        // Use UTC time for timestamp
+        const timestamp = new Date();
+        const isoTimestamp = timestamp.toISOString(); // Already in UTC
+
+        // Create log entry string
+        // Use simple string format for easier appending and reading
+        let logString = `[${isoTimestamp}] ${message}`;
+        if (data) {
+            // Convert data object to a readable string format on the same line
+            const dataString = Object.entries(data)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ');
+            logString += ` { ${dataString} }`;
+        }
+        logString += '\n'; // Add newline at the end of the entry
+
+        // Create user-specific log file path
+        const userLogFile = `${userId}.log`;
+        const logPath = path.join(LOGS_DIR, userLogFile);
+        console.log(`[DEBUG] Attempting to write to logPath: ${logPath}`);
+
+        // Append to the file
+        fs.appendFileSync(logPath, logString, 'utf-8');
+        console.log(`[DEBUG] Successfully appended to ${logPath}`);
+
+        // Optional: Also log to console for real-time visibility
+        // console.log(`[User: ${userId}] ${message}`, data || '');
+
+    } catch (error) {
+        // Ensure the error related to userLog is clearly marked
+        console.error(`[USER_LOG_ERROR] Error writing to user log for User ID ${userId}:`, error);
+    }
+}
+
+/**
  * Creates or updates a transfer log tracking all notifications sent
  * @param walletAddress Wallet address
  * @param userId User ID

@@ -304,12 +304,12 @@ export function setupBot(db: any) {
                 );
 
                 // Send a test alert if this is their first token
-                if (currentCount === 0) {
-                    // Wait a bit before sending test alert
-                    setTimeout(async () => {
-                        await sendTestPriceAlerts(chatId, token);
-                    }, 3000);
-                }
+                // if (currentCount === 0) {
+                //     // Wait a bit before sending test alert
+                //     setTimeout(async () => {
+                //         await sendTestPriceAlerts(chatId, token);
+                //     }, 3000);
+                // }
             } catch (error) {
                 console.error('Error in /track_token command:', error);
                 await bot.sendMessage(
@@ -587,21 +587,23 @@ export function setupBot(db: any) {
         const chatId = msg.chat.id;
 
         try {
-            // Get user's token subscriptions
-            const subscriptions = await getUserTokenSubscriptions(db, chatId);
+            // Only fetch user-set price alerts now
+            // const subscriptions = await getUserTokenSubscriptions(db, chatId);
             const priceAlerts = await getUserPriceAlerts(db, chatId);
 
-            if (subscriptions.length === 0 && priceAlerts.length === 0) {
+            // Check only if user-set price alerts exist
+            if (priceAlerts.length === 0) {
                 await bot.sendMessage(
                     chatId,
-                    "You don't have any active token alerts. Use /track_token to start tracking a token's price movements."
+                    "You don't have any active price target alerts. Use /set_alert to create one."
                 );
                 return;
             }
 
             let message = `📊 <b>Your Token Alerts</b>\n\n`;
 
-            // General price movement alerts
+            // Remove the section for General Price Movements based on subscriptions
+            /*
             if (subscriptions.length > 0) {
                 message += `<b>General Price Movements (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%):</b>\n`;
 
@@ -622,6 +624,7 @@ export function setupBot(db: any) {
 
                 message += `\n`;
             }
+            */
 
             // Specific price target alerts
             if (priceAlerts.length > 0) {
