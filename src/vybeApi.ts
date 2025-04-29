@@ -349,7 +349,6 @@ export function calculatePriceChangePercent(currentPrice: number, previousPrice:
  */
 export async function getProgramDauTimeSeries(programId: string): Promise<DauDataPoint[] | null> {
     const apiKey = process.env.VYBE_KEY;
-    console.log("apiKey", apiKey);
 
     if (!apiKey) {
         console.error('VYBE_KEY is not set in environment variables');

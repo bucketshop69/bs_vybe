@@ -58,13 +58,22 @@ const KOLS_PER_PAGE = 5;
 // Map to store last viewed KOL per user for /track_kol context
 const lastViewedKOL = new Map<number, KOLAccountWithPnL>();
 
+// Move the truncateAddress helper function here so it is defined before use
+function truncateAddress(address: string, startChars = 6, endChars = 4): string {
+    if (address.length <= startChars + endChars + 3) {
+        return address; // Address is too short to truncate meaningfully
+    }
+    return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
+}
+
 // Set up the commands that will appear in the menu
 bot.setMyCommands([
     { command: 'start', description: 'Start the bot and see available commands' },
     { command: 'kols', description: 'View top KOL traders and their performance' },
     { command: 'track_token', description: 'Track a token for price alerts' },
     { command: 'set_alert', description: 'Set price target alert for a token' },
-    { command: 'unsubscribe_kol_updates', description: 'Stop receiving KOL ranking updates' }
+    { command: 'unsubscribe_kol_updates', description: 'Stop receiving KOL ranking updates' },
+    { command: 'tracked_wallets', description: 'View your tracked wallets' },
 ]).then(() => {
     console.log('Bot commands menu set successfully');
 }).catch((error) => {
@@ -101,8 +110,7 @@ export function setupBot(db: any) {
             `🚀 <b>Welcome to the bs_vybe Bot!</b> 🚀\n\n` +
 
             `<b>📱 WALLET TRACKING</b>\n` +
-            `/track_wallet - Track a Solana wallet\n` +
-            `/my_wallets - View your tracked wallets\n` +
+            `/tracked_wallets - View your tracked wallets\n` +
             `/remove_wallet- Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
@@ -142,8 +150,7 @@ export function setupBot(db: any) {
             `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
 
             `<b>📱 WALLET TRACKING</b>\n` +
-            `/track_wallet - Track a Solana wallet\n` +
-            `/my_wallets - View your tracked wallets\n` +
+            `/tracked_wallets - View your tracked wallets\n` +
             `/remove_wallet - Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
@@ -203,6 +210,84 @@ export function setupBot(db: any) {
             }
             // Send error message to user
             await bot.sendMessage(chatId, errorMessage);
+        }
+    });
+
+    // Handle /tracked_wallets command
+    bot.onText(/\/tracked_wallets/, async (msg) => {
+        const chatId = msg.chat.id;
+        try {
+            const [userWallets, kolAccounts] = await Promise.all([
+                getUserTrackedWallets(db, chatId),
+                getKOLAccounts()
+            ]);
+            if (userWallets.length === 0) {
+                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_kol after viewing a KOL profile to start.");
+                return;
+            }
+            const kolLookup = new Map<string, { name: string; twitterUrl?: string }>();
+            if (kolAccounts) {
+                kolAccounts.forEach(kol => {
+                    kolLookup.set(kol.ownerAddress, { name: kol.name, twitterUrl: kol.twitterUrl });
+                });
+            }
+            const kolWallets: any[] = [];
+            const otherWallets: any[] = [];
+            userWallets.forEach((wallet: { wallet_address: string; tracking_started_at: number | null; label?: string }) => {
+                const kolInfo = kolLookup.get(wallet.wallet_address);
+                if (kolInfo) {
+                    kolWallets.push({ ...wallet, kolName: kolInfo.name, twitterUrl: kolInfo.twitterUrl });
+                } else {
+                    otherWallets.push(wallet);
+                }
+            });
+            let message = `📊 <b>Your Tracked Wallets (${userWallets.length}/5)</b>\n`;
+            let listIndex = 1;
+            // Display KOL Wallets
+            if (kolWallets.length > 0) {
+                message += `\n<b>👑 KOL Wallets:</b>\n`;
+                kolWallets.forEach(wallet => {
+                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
+                    const truncatedAddr = truncateAddress(wallet.wallet_address);
+                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=trading`;
+                    let twitterHandle = '';
+                    if (wallet.twitterUrl) {
+                        const match = wallet.twitterUrl.match(/twitter\.com\/(\w+)|x\.com\/(\w+)/);
+                        if (match && (match[1] || match[2])) {
+                            twitterHandle = ` (@${match[1] || match[2]})`;
+                        }
+                    }
+                    message += `${listIndex}. <b>${wallet.kolName}</b>${twitterHandle}\n`;
+                    message += `   <code>${wallet.wallet_address}</code>\n`;
+                    message += `   <a href=\"${explorerUrl}\">View on Vybe</a>\n`;
+                    message += `   Tracked since: ${startDate}\n\n`;
+                    listIndex++;
+                });
+            }
+            // Display Other Wallets
+            if (otherWallets.length > 0) {
+                message += `\n<b>👤 Other Wallets:</b>\n`;
+                otherWallets.forEach(wallet => {
+                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
+                    const truncatedAddr = truncateAddress(wallet.wallet_address);
+                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=trading`;
+                    message += `${listIndex}. <a href=\"${explorerUrl}\"><code>${truncatedAddr}</code></a>\n`;
+                    message += `   <code>${wallet.wallet_address}</code>\n`;
+                    message += `   <a href=\"${explorerUrl}\">View on Vybe</a>\n`;
+                    message += `   Tracked since: ${startDate}\n`;
+                    if (wallet.label) {
+                        message += `   Label: ${wallet.label}\n`;
+                    }
+                    message += '\n';
+                    listIndex++;
+                });
+            }
+            message += "\n• Use /remove_wallet to stop tracking.\n";
+            message += "• Use /track_kol after viewing a KOL profile to add more.";
+            await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
+        } catch (error) {
+            console.error('Error in /tracked_wallets command:', error);
+            await bot.sendMessage(chatId, `❌ Error fetching your wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     });
 
@@ -586,98 +671,6 @@ export function setupBot(db: any) {
         }
     });
 
-    // Helper function to truncate wallet addresses
-    function truncateAddress(address: string, startChars = 6, endChars = 4): string {
-        if (address.length <= startChars + endChars + 3) {
-            return address; // Address is too short to truncate meaningfully
-        }
-        return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
-    }
-
-    // Handle /my_wallets command with clickable addresses linking to vybe.fyi
-    bot.onText(/\/my_wallets/, async (msg) => {
-        const chatId = msg.chat.id;
-        try {
-            // Fetch user's tracked wallets and KOL accounts concurrently
-            const [userWallets, kolAccounts] = await Promise.all([
-                getUserTrackedWallets(db, chatId),
-                getKOLAccounts()
-            ]);
-
-            if (userWallets.length === 0) {
-                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_kol after viewing a KOL profile to start.");
-                return;
-            }
-
-            const kolLookup = new Map<string, { name: string; twitterUrl?: string }>();
-            if (kolAccounts) {
-                kolAccounts.forEach(kol => {
-                    kolLookup.set(kol.ownerAddress, { name: kol.name, twitterUrl: kol.twitterUrl });
-                });
-            }
-
-            const kolWallets: any[] = [];
-            const otherWallets: any[] = [];
-            userWallets.forEach((wallet: { wallet_address: string; tracking_started_at: number | null; label?: string }) => {
-                const kolInfo = kolLookup.get(wallet.wallet_address);
-                if (kolInfo) {
-                    kolWallets.push({ ...wallet, kolName: kolInfo.name, twitterUrl: kolInfo.twitterUrl });
-                } else {
-                    otherWallets.push(wallet);
-                }
-            });
-
-            let message = `📊 <b>Your Tracked Wallets (${userWallets.length}/5)</b>\n`;
-            let listIndex = 1;
-
-            // Display KOL Wallets
-            if (kolWallets.length > 0) {
-                message += `\n<b>👑 KOL Wallets:</b>\n`;
-                kolWallets.forEach(wallet => {
-                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
-                    const truncatedAddr = truncateAddress(wallet.wallet_address);
-                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=overview`;
-                    let twitterHandle = '';
-                    if (wallet.twitterUrl) {
-                        const match = wallet.twitterUrl.match(/twitter\.com\/(\w+)|x\.com\/(\w+)/);
-                        if (match && (match[1] || match[2])) {
-                            twitterHandle = ` (@${match[1] || match[2]})`;
-                        }
-                    }
-                    message += `${listIndex}. <b>${wallet.kolName}</b>${twitterHandle}\n`;
-                    message += `   <a href="${explorerUrl}"><code>${truncatedAddr}</code></a>\n`;
-                    message += `   Tracked since: ${startDate}\n\n`;
-                    listIndex++;
-                });
-            }
-
-            // Display Other Wallets
-            if (otherWallets.length > 0) {
-                message += `\n<b>👤 Other Wallets:</b>\n`;
-                otherWallets.forEach(wallet => {
-                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
-                    const truncatedAddr = truncateAddress(wallet.wallet_address);
-                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=overview`;
-                    message += `${listIndex}. <a href="${explorerUrl}"><code>${truncatedAddr}</code></a>\n`;
-                    message += `   Tracked since: ${startDate}\n`;
-                    if (wallet.label) {
-                        message += `   Label: ${wallet.label}\n`;
-                    }
-                    message += '\n';
-                    listIndex++;
-                });
-            }
-
-            message += "\n• Use /remove_wallet to stop tracking.\n";
-            message += "• Use /track_kol after viewing a KOL profile to add more.";
-
-            await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
-        } catch (error) {
-            console.error('Error in /my_wallets command:', error);
-            await bot.sendMessage(chatId, `❌ Error fetching your wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    });
-
     // Handle /track_token command
     bot.onText(/\/track_token/, async (msg) => {
         const chatId = msg.chat.id;
@@ -997,7 +990,7 @@ export function setupBot(db: any) {
             }
             // Try to add the wallet
             await addTrackedWallet(db, chatId, walletAddress);
-            await bot.sendMessage(chatId, `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\nView all your tracked wallets with /my_wallets.`, { parse_mode: 'HTML' });
+            await bot.sendMessage(chatId, `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\nView all your tracked wallets with /tracked_wallets.`, { parse_mode: 'HTML' });
             // Optionally clear context after success
             lastViewedKOL.delete(chatId);
         } catch (error: any) {
@@ -1192,43 +1185,51 @@ function createKOLDetailKeyboard(kolNumber: number, twitterUrl?: string): Telegr
     return { inline_keyboard: buttons };
 }
 
-// --- Phase 4 Functions (Notification Delivery) ---
-
 // Define a type for the change data (adjust as needed based on Phase 3)
 export interface KOLChangeData {
     newNumberOne?: { name: string; address: string };
     newEntrantsTop5?: { name: string; address: string }[];
 }
 
-// Format KOL update message
-function formatKOLUpdateMessage(changeData: KOLChangeData): string {
+// Format KOL update message with handle and Vybe URL
+async function formatKOLUpdateMessageWithLinks(changeData: KOLChangeData): Promise<string> {
+    // Fetch all KOL accounts for lookup
+    const kolAccounts = await getKOLAccounts();
+    const kolLookup = new Map();
+    if (kolAccounts) {
+        kolAccounts.forEach(kol => {
+            kolLookup.set(kol.ownerAddress, kol);
+        });
+    }
     let message = `🏆 <b>KOL Ranking Update!</b> 🏆\n`;
     let changesExist = false;
-
     if (changeData.newNumberOne) {
-        message += `\n🥇 New #1: <b>${changeData.newNumberOne.name}</b> is now leading the charts!\n`;
+        const kol = kolLookup.get(changeData.newNumberOne.address);
+        let handle = kol && kol.twitterUrl ? kol.twitterUrl.replace(/.*\/(\w+)$/, '@$1') : '';
+        let vybeUrl = `https://vybe.fyi/wallets/${changeData.newNumberOne.address}?tab=trading`;
+        message += `\n🥇 New #1: <b>${changeData.newNumberOne.name}</b> ${handle}\n<a href=\"${vybeUrl}\">View on Vybe</a>\n`;
         changesExist = true;
     }
-
     if (changeData.newEntrantsTop5 && changeData.newEntrantsTop5.length > 0) {
         message += `\n🚀 New in Top 5:\n`;
-        changeData.newEntrantsTop5.forEach(kol => {
-            message += `- ${kol.name}\n`;
+        changeData.newEntrantsTop5.forEach(kolData => {
+            const kol = kolLookup.get(kolData.address);
+            let handle = kol && kol.twitterUrl ? kol.twitterUrl.replace(/.*\/(\w+)$/, '@$1') : '';
+            let vybeUrl = `https://vybe.fyi/wallets/${kolData.address}?tab=trading`;
+            message += `- <b>${kolData.name}</b> ${handle} <a href=\"${vybeUrl}\">Vybe</a>\n`;
         });
         changesExist = true;
     }
-
     if (!changesExist) {
-        return ''; // No significant changes to report
+        return '';
     }
-
     message += `\nUse /kols to see the full list.`;
     return message;
 }
 
 // Broadcast KOL updates to subscribed users
 export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
-    const message = formatKOLUpdateMessage(changes);
+    const message = await formatKOLUpdateMessageWithLinks(changes);
     if (!message) {
         console.log('No significant KOL changes to broadcast.');
         return;
