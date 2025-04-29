@@ -152,6 +152,7 @@ export function setupBot(db: any) {
         );
     });
 
+    // TODO: Remove this command
     bot.onText(/\/prices/, async (msg: any) => {
         // Ensure msg.chat exists (it always should for onText)
         const chatId: number = msg.chat.id;

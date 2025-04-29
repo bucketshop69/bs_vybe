@@ -236,20 +236,6 @@ export async function getTokenPrice(mintAddress: string): Promise<TokenPrice | n
     }
 }
 
-/**
- * Checks if a token exists in the Vybe API
- * @param mintAddress Token mint address to verify
- * @returns Promise<boolean> True if token exists and data can be fetched
- */
-export async function verifyToken(mintAddress: string): Promise<boolean> {
-    try {
-        const tokenDetails = await getTokenDetails(mintAddress);
-        return typeof tokenDetails !== 'string';
-    } catch (error) {
-        console.error(`Error verifying token ${mintAddress}:`, error);
-        return false;
-    }
-}
 
 /**
  * Calculates the percentage change between two price points
@@ -395,20 +381,6 @@ export async function getRankedDexData(): Promise<RankedDexData[]> {
     return successfulResults;
 }
 
-/**
- * Tests the ranked DEX data fetching
- */
-export async function testRankedDexData() {
-    console.log('Testing ranked DEX data fetching...');
-    const rankedData = await getRankedDexData();
-
-    console.log('\nRanked DEX Programs by DAU:');
-    rankedData.forEach((data, index) => {
-        console.log(`\n${index + 1}. ${data.name} (${data.shortId})`);
-        console.log(`   DAU: ${data.currentDau.toLocaleString()}`);
-        console.log(`   24h Change: ${data.percentChange24h !== null ? `${data.percentChange24h.toFixed(2)}%` : 'N/A'}`);
-    });
-}
 
 /**
  * Formats the ranked DEX data into a digest message
@@ -449,16 +421,6 @@ export function formatDigestMessage(rankedData: RankedDexData[]): string {
     return message;
 }
 
-/**
- * Tests the digest message formatting
- */
-export async function testDigestFormatting() {
-    console.log('Testing digest message formatting...');
-    const rankedData = await getRankedDexData();
-    const message = formatDigestMessage(rankedData);
-    console.log('\nFormatted Digest Message:');
-    console.log(message);
-}
 
 /**
  * Fetches recent token transfers for a specific wallet address
@@ -522,20 +484,6 @@ export async function getRecentTransfersForWallet(
     }
 }
 
-/**
- * Tests fetching prices for all tracked tokens
- */
-export async function testTokenPrices() {
-    console.log('Testing token price fetching for all tracked tokens...');
-    const tokenPrices = await getAllTrackedTokenPrices();
-
-    console.log('\nToken prices:');
-    tokenPrices.forEach(token => {
-        console.log(`\n${token.symbol} (${token.mint_address.substring(0, 4)}...)`);
-        console.log(`   Price: $${token.current_price.toFixed(4)}`);
-        console.log(`   Last updated: ${new Date(token.last_update_time * 1000).toLocaleString()}`);
-    });
-}
 
 /**
  * Get token details by symbol or mint address
