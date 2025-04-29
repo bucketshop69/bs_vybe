@@ -6,7 +6,8 @@ import { TokenPrice } from './database';
 // Load environment variables
 dotenv.config();
 
-// Type definitions for the API response
+// === TYPE & INTERFACE DEFINITIONS ===
+// DAU Related Types
 export interface DauDataPoint {
     programId: string;
     dau: number;
@@ -29,7 +30,7 @@ interface RankedDexData {
     percentChange24h: number | null;
 }
 
-// Interface for token transfers
+// Token Transfer Related Types
 export interface VybeTransfer {
     signature: string;
     blockTime: number;
@@ -52,6 +53,7 @@ interface VybeTransferResponse {
     }>;
 }
 
+// Token Instruction Related Types
 interface TokenInstructionData {
     callingInstructions: number[];
     ixName: string;
@@ -63,7 +65,7 @@ interface TokenInstructionResponse {
     data: TokenInstructionData[];
 }
 
-// Export TokenDetails interface for use in other files
+// Token Details Type
 export interface TokenDetails {
     symbol: string;
     name: string;
@@ -83,7 +85,91 @@ export interface TokenDetails {
     usdValueVolume24h: number;
 }
 
-// Token API rate limiting configuration
+// Known Account Related Types
+export interface KnownAccount {
+    ownerAddress: string;
+    name: string;
+    logoUrl: string;
+    labels: string[];
+    entity: string;
+    entityId: number;
+    twitterUrl: string;
+    dateAdded: string;
+}
+
+interface KnownAccountsResponse {
+    accounts: KnownAccount[];
+}
+
+export interface GetKnownAccountsOptions {
+    ownerAddress?: string;
+    name?: string;
+    labels?: string[];
+    entityName?: string;
+    entityId?: number;
+    sortByAsc?: string;
+    sortByDesc?: string;
+}
+
+// PnL Related Types
+interface TokenMetricsTrades {
+    volumeUsd: number;
+    tokenAmount: number;
+    transactionCount: number;
+}
+
+interface TokenMetrics {
+    tokenAddress: string;
+    tokenSymbol: string;
+    realizedPnlUsd: number;
+    unrealizedPnlUsd: number;
+    buys: TokenMetricsTrades;
+    sells: TokenMetricsTrades;
+}
+
+interface BestWorstToken {
+    tokenSymbol: string;
+    tokenAddress: string;
+    tokenName: string;
+    tokenLogoUrl: string;
+    pnlUsd: number;
+}
+
+interface PnLSummary {
+    winRate: number;
+    realizedPnlUsd: number;
+    unrealizedPnlUsd: number;
+    uniqueTokensTraded: number;
+    averageTradeUsd: number;
+    tradesCount: number;
+    winningTradesCount: number;
+    losingTradesCount: number;
+    tradesVolumeUsd: number;
+    bestPerformingToken: BestWorstToken | null;
+    worstPerformingToken: BestWorstToken | null;
+    pnlTrendSevenDays: [number, number][];
+}
+
+interface AccountPnLResponse {
+    summary: PnLSummary;
+    tokenMetrics: TokenMetrics[];
+}
+
+export interface GetAccountPnLOptions {
+    resolution?: string;
+    tokenAddress?: string;
+    sortByAsc?: string;
+    sortByDesc?: string;
+    limit?: number;
+    page?: number;
+}
+
+export interface KOLAccountWithPnL extends KnownAccount {
+    pnlData: AccountPnLResponse;
+}
+
+// === UTILITY FUNCTIONS ===
+// Rate Limiting Configuration
 const TOKEN_API_RATE_LIMIT = {
     maxRequestsPerMinute: 60,
     requestCount: 0,
@@ -96,7 +182,10 @@ setInterval(() => {
     TOKEN_API_RATE_LIMIT.resetTime = Date.now() + 60000;
 }, 60000);
 
-// Check if we're within rate limits
+/**
+ * Checks if we're within rate limits
+ * @returns boolean indicating if request should proceed
+ */
 function checkRateLimit(): boolean {
     // Reset counter if we're in a new minute
     if (Date.now() > TOKEN_API_RATE_LIMIT.resetTime) {
@@ -114,11 +203,15 @@ function checkRateLimit(): boolean {
     return true;
 }
 
-// Calculate wait time if rate limited
+/**
+ * Calculates wait time if rate limited
+ * @returns number of milliseconds to wait
+ */
 function getRateLimitWaitTime(): number {
     return TOKEN_API_RATE_LIMIT.resetTime - Date.now();
 }
 
+// === API CLIENT FUNCTIONS ===
 /**
  * Gets the token details for a given mint address
  * @param mintAddress The token's mint address
@@ -149,7 +242,6 @@ export async function getTokenDetails(mintAddress: string): Promise<TokenDetails
             }
         );
 
-        // Return the token details - API returns the details directly in the data property
         return response.data;
     } catch (error) {
         console.error(`Error fetching token details for ${mintAddress}:`, error);
@@ -157,6 +249,8 @@ export async function getTokenDetails(mintAddress: string): Promise<TokenDetails
     }
 }
 
+// === BUSINESS LOGIC FUNCTIONS ===
+// Token Price Related Functions
 /**
  * Fetches the latest token prices for a list of mint addresses
  * @param mintAddresses Array of token mint addresses
@@ -236,7 +330,6 @@ export async function getTokenPrice(mintAddress: string): Promise<TokenPrice | n
     }
 }
 
-
 /**
  * Calculates the percentage change between two price points
  * @param currentPrice Current token price
@@ -248,6 +341,7 @@ export function calculatePriceChangePercent(currentPrice: number, previousPrice:
     return ((currentPrice - previousPrice) / previousPrice) * 100;
 }
 
+// DAU Related Functions
 /**
  * Fetches the last two days of DAU data for a specific program ID
  * @param programId The Solana program ID to fetch data for
@@ -275,7 +369,6 @@ export async function getProgramDauTimeSeries(programId: string): Promise<DauDat
                 }
             }
         );
-
 
         // Validate response data
         if (!response.data?.data || !Array.isArray(response.data.data)) {
@@ -381,7 +474,6 @@ export async function getRankedDexData(): Promise<RankedDexData[]> {
     return successfulResults;
 }
 
-
 /**
  * Formats the ranked DEX data into a digest message
  * @param rankedData Array of ranked DEX data
@@ -421,7 +513,7 @@ export function formatDigestMessage(rankedData: RankedDexData[]): string {
     return message;
 }
 
-
+// Wallet Related Functions
 /**
  * Fetches recent token transfers for a specific wallet address
  * @param walletAddress The Solana wallet address to fetch transfers for
@@ -462,7 +554,6 @@ export async function getRecentTransfersForWallet(
             return null;
         }
 
-
         // Create an array of promises that resolve to VybeTransfer objects with awaited token details
         const transferPromises = response.data.transfers.map(async (transfer) => {
             const tokenDetails = await getTokenDetails(transfer.mintAddress);
@@ -483,7 +574,6 @@ export async function getRecentTransfersForWallet(
         return null;
     }
 }
-
 
 /**
  * Get token details by symbol or mint address
@@ -543,4 +633,175 @@ export async function getRecentSignaturesForWallet(walletAddress: string, limit:
         console.error(`Error fetching signatures for wallet ${walletAddress} from Helius:`, error);
         return [];
     }
+}
+
+// Account Related Functions
+/**
+ * Fetches known accounts based on optional filters
+ * @param options Object containing optional query parameters
+ * @returns Promise containing an array of known accounts or null if the request fails
+ */
+export async function getKnownAccounts(
+    options: GetKnownAccountsOptions = {}
+): Promise<KnownAccount[] | null> {
+    const apiKey = process.env.VYBE_KEY;
+    if (!apiKey) {
+        console.error('VYBE_KEY is not set in environment variables');
+        return null;
+    }
+
+    // Prepare params, converting labels array to comma-separated string if present
+    const params: Record<string, any> = { ...options };
+    if (params.labels && Array.isArray(params.labels)) {
+        params.labels = params.labels.join(',');
+    }
+
+    try {
+        const response = await axios.get<KnownAccountsResponse>(
+            'https://api.vybenetwork.xyz/account/known-accounts',
+            {
+                params,
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-KEY': apiKey
+                }
+            }
+        );
+
+        if (!response.data?.accounts || !Array.isArray(response.data.accounts)) {
+            console.error('Invalid response format for known accounts:', response.data);
+            return null;
+        }
+
+        return response.data.accounts;
+    } catch (error) {
+        console.error('Error fetching known accounts:', error);
+        return null;
+    }
+}
+
+
+/**
+ * Fetches all known accounts with the 'KOL' label
+ * @returns Promise containing an array of known accounts labeled as KOL or null if the request fails
+ */
+export async function getKOLAccounts(): Promise<KnownAccount[] | null> {
+    return getKnownAccounts({ labels: ['KOL'] });
+}
+
+
+if (require.main === module) {
+    getKOLAccounts()
+        .then(kolaAccounts => {
+            console.log(kolaAccounts);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+/**
+ * Fetches PnL (Profit and Loss) data for a specific account
+ * @param ownerAddress The account address to fetch PnL for (required)
+ * @param options Optional parameters for filtering and pagination
+ * @returns Promise containing the account's PnL data or null if the request fails
+ */
+export async function getAccountPnL(
+    ownerAddress: string,
+    options: GetAccountPnLOptions = {}
+): Promise<AccountPnLResponse | null> {
+    const apiKey = process.env.VYBE_KEY;
+    if (!apiKey) {
+        console.error('VYBE_KEY is not set in environment variables');
+        return null;
+    }
+
+    try {
+        // Set default values for resolution and limit
+        const params = {
+            resolution: '1d',
+            limit: 30,
+            ...options
+        };
+
+        const response = await axios.get<AccountPnLResponse>(
+            `https://api.vybenetwork.xyz/account/pnl/${ownerAddress}`,
+            {
+                params,
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-KEY': apiKey
+                }
+            }
+        );
+
+        if (!response.data?.summary || !response.data?.tokenMetrics) {
+            console.error('Invalid response format for account PnL:', response.data);
+            return null;
+        }
+
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching PnL data for account ${ownerAddress}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Fetches all KOL accounts and their PnL data, filtering for accounts with trading activity
+ * @returns Promise containing an array of KOL accounts with their PnL data
+ */
+export async function getActiveKOLAccounts(): Promise<KOLAccountWithPnL[] | null> {
+    try {
+        // First get all KOL accounts
+        const kolAccounts = await getKOLAccounts();
+        if (!kolAccounts) {
+            console.error('Failed to fetch KOL accounts');
+            return null;
+        }
+
+        // Fetch PnL data for each KOL account
+        const accountsWithPnL = await Promise.all(
+            kolAccounts.map(async (account) => {
+                const pnlData = await getAccountPnL(account.ownerAddress);
+                if (pnlData && pnlData.tokenMetrics.length > 0) {
+                    return {
+                        ...account,
+                        pnlData
+                    };
+                }
+                return null;
+            })
+        );
+
+        // Filter out accounts with no PnL data and remove nulls
+        const activeAccounts = accountsWithPnL.filter((account): account is KOLAccountWithPnL =>
+            account !== null
+        );
+
+        console.log(`Found ${activeAccounts.length} active KOL accounts out of ${kolAccounts.length} total`);
+        return activeAccounts;
+    } catch (error) {
+        console.error('Error fetching active KOL accounts:', error);
+        return null;
+    }
+}
+
+// Example usage in main
+if (require.main === module) {
+    getActiveKOLAccounts()
+        .then(activeKOLs => {
+            if (activeKOLs) {
+                console.log(`Active KOLs with trading activity: ${activeKOLs.length}`);
+                activeKOLs.forEach(kol => {
+                    console.log(`\nKOL: ${kol.name}`);
+                    console.log(`Address: ${kol.ownerAddress}`);
+                    console.log(`Tokens traded: ${kol.pnlData.tokenMetrics.length}`);
+                    console.log(`Total PnL: $${kol.pnlData.summary.realizedPnlUsd.toFixed(2)}`);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
 }

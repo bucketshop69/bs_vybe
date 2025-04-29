@@ -1,17 +1,19 @@
 import TelegramBot from 'node-telegram-bot-api';
 import dotenv from 'dotenv';
-import { getRankedDexData, formatDigestMessage, getTokenBySymbolOrAddress } from './vybeApi';
+import { getRankedDexData, formatDigestMessage, getTokenBySymbolOrAddress, getActiveKOLAccounts, type KOLAccountWithPnL, getKOLAccounts, type KnownAccount } from './vybeApi';
 import {
     addTrackedWallet,
     getUserTrackedWallets,
     removeTrackedWallet,
     subscribeToTokenAlerts,
-    getUserTokenSubscriptions,
     getTokenSubscriptionCount,
     createPriceAlert,
     getUserPriceAlerts,
     removePriceAlert,
-    getTokenPrice
+    getTokenPrice,
+    addKolUnsubscription,
+    getAllUserIds,
+    getKolUnsubscribedUserIds,
 } from './database';
 import { getTokenPriceChange } from './tokenPriceService';
 import { PRICE_ALERT_CONFIG } from './config';
@@ -49,12 +51,20 @@ const usersWaitingForAlertPrice = new Map<number, { token: string }>();
 // Map to track users waiting for alert ID to remove
 const usersWaitingToRemoveAlert = new Map<number, boolean>();
 
+// Add KOL pagination state tracking
+const kolsPageState = new Map<number, number>();  // chatId -> current page
+const KOLS_PER_PAGE = 5;
+
+// Map to store last viewed KOL per user for /track_kol context
+const lastViewedKOL = new Map<number, KOLAccountWithPnL>();
+
 // Set up the commands that will appear in the menu
 bot.setMyCommands([
     { command: 'start', description: 'Start the bot and see available commands' },
-    { command: 'track_wallet', description: 'Track a Solana wallet' },
+    { command: 'kols', description: 'View top KOL traders and their performance' },
     { command: 'track_token', description: 'Track a token for price alerts' },
     { command: 'set_alert', description: 'Set price target alert for a token' },
+    { command: 'unsubscribe_kol_updates', description: 'Stop receiving KOL ranking updates' }
 ]).then(() => {
     console.log('Bot commands menu set successfully');
 }).catch((error) => {
@@ -105,6 +115,12 @@ export function setupBot(db: any) {
             `/my_alerts - View your active price alerts\n` +
             `/remove_alert <code>id</code> - Remove a specific price alert\n\n` +
 
+            `<b>🏆 KOL TRACKING</b>\n` +
+            `/kols - View top KOL traders and their performance\n` +
+            `  ➕ Use /track_kol (after /kols) to track a KOL's wallet\n` +
+            `🔔 Get periodic updates on Top KOL ranking changes!\n` +
+            `  /unsubscribe_kol_updates - Opt-out of KOL updates\n\n` +
+
             `<b>ℹ️ OTHER COMMANDS</b>\n` +
             `/testdigest - Test the DEX data functionality\n` +
             `/help - Show this message again\n\n` +
@@ -139,6 +155,12 @@ export function setupBot(db: any) {
 
             `/my_alerts - View your active price alerts\n` +
             `/remove_alert <code>id</code> - Remove a specific price alert\n\n` +
+
+            `<b>🏆 KOL TRACKING</b>\n` +
+            `/kols - View top KOL traders and their performance\n` +
+            `  ➕ Use /track_kol (after /kols) to track a KOL's wallet\n` +
+            `🔔 Get periodic updates on Top KOL ranking changes!\n` +
+            `  /unsubscribe_kol_updates - Opt-out of KOL updates\n\n` +
 
             `<b>ℹ️ OTHER COMMANDS</b>\n` +
             `/testdigest - Test the DEX data functionality\n` +
@@ -564,35 +586,92 @@ export function setupBot(db: any) {
         }
     });
 
-    // Handle /my_wallets command
+    // Helper function to truncate wallet addresses
+    function truncateAddress(address: string, startChars = 6, endChars = 4): string {
+        if (address.length <= startChars + endChars + 3) {
+            return address; // Address is too short to truncate meaningfully
+        }
+        return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
+    }
+
+    // Handle /my_wallets command with clickable addresses linking to vybe.fyi
     bot.onText(/\/my_wallets/, async (msg) => {
         const chatId = msg.chat.id;
         try {
-            const wallets = await getUserTrackedWallets(db, chatId);
+            // Fetch user's tracked wallets and KOL accounts concurrently
+            const [userWallets, kolAccounts] = await Promise.all([
+                getUserTrackedWallets(db, chatId),
+                getKOLAccounts()
+            ]);
 
-            if (wallets.length === 0) {
-                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_wallet to start tracking a wallet.");
+            if (userWallets.length === 0) {
+                await bot.sendMessage(chatId, "You're not tracking any wallets yet. Use /track_kol after viewing a KOL profile to start.");
                 return;
             }
 
-            let message = `🔍 <b>Your Tracked Wallets (${wallets.length}/5)</b>\n\n`;
+            const kolLookup = new Map<string, { name: string; twitterUrl?: string }>();
+            if (kolAccounts) {
+                kolAccounts.forEach(kol => {
+                    kolLookup.set(kol.ownerAddress, { name: kol.name, twitterUrl: kol.twitterUrl });
+                });
+            }
 
-            wallets.forEach((wallet: { wallet_address: string; tracking_started_at: number | null; label?: string }, index: number) => {
-                const startDate = wallet.tracking_started_at ?
-                    new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] :
-                    'Unknown';
-
-                message += `${index + 1}. <code>${wallet.wallet_address}</code>\n`;
-                message += `   Tracking since: ${startDate}\n`;
-                if (wallet.label) {
-                    message += `   Label: ${wallet.label}\n`;
+            const kolWallets: any[] = [];
+            const otherWallets: any[] = [];
+            userWallets.forEach((wallet: { wallet_address: string; tracking_started_at: number | null; label?: string }) => {
+                const kolInfo = kolLookup.get(wallet.wallet_address);
+                if (kolInfo) {
+                    kolWallets.push({ ...wallet, kolName: kolInfo.name, twitterUrl: kolInfo.twitterUrl });
+                } else {
+                    otherWallets.push(wallet);
                 }
-                message += '\n';
             });
 
-            message += "To stop tracking a wallet, use /remove_wallet";
+            let message = `📊 <b>Your Tracked Wallets (${userWallets.length}/5)</b>\n`;
+            let listIndex = 1;
 
-            await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+            // Display KOL Wallets
+            if (kolWallets.length > 0) {
+                message += `\n<b>👑 KOL Wallets:</b>\n`;
+                kolWallets.forEach(wallet => {
+                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
+                    const truncatedAddr = truncateAddress(wallet.wallet_address);
+                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=overview`;
+                    let twitterHandle = '';
+                    if (wallet.twitterUrl) {
+                        const match = wallet.twitterUrl.match(/twitter\.com\/(\w+)|x\.com\/(\w+)/);
+                        if (match && (match[1] || match[2])) {
+                            twitterHandle = ` (@${match[1] || match[2]})`;
+                        }
+                    }
+                    message += `${listIndex}. <b>${wallet.kolName}</b>${twitterHandle}\n`;
+                    message += `   <a href="${explorerUrl}"><code>${truncatedAddr}</code></a>\n`;
+                    message += `   Tracked since: ${startDate}\n\n`;
+                    listIndex++;
+                });
+            }
+
+            // Display Other Wallets
+            if (otherWallets.length > 0) {
+                message += `\n<b>👤 Other Wallets:</b>\n`;
+                otherWallets.forEach(wallet => {
+                    const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
+                    const truncatedAddr = truncateAddress(wallet.wallet_address);
+                    const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=overview`;
+                    message += `${listIndex}. <a href="${explorerUrl}"><code>${truncatedAddr}</code></a>\n`;
+                    message += `   Tracked since: ${startDate}\n`;
+                    if (wallet.label) {
+                        message += `   Label: ${wallet.label}\n`;
+                    }
+                    message += '\n';
+                    listIndex++;
+                });
+            }
+
+            message += "\n• Use /remove_wallet to stop tracking.\n";
+            message += "• Use /track_kol after viewing a KOL profile to add more.";
+
+            await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
         } catch (error) {
             console.error('Error in /my_wallets command:', error);
             await bot.sendMessage(chatId, `❌ Error fetching your wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -727,6 +806,227 @@ export function setupBot(db: any) {
         }
     });
 
+    // Update the /kols command handler
+    bot.onText(/\/kols/, async (msg) => {
+        const chatId = msg.chat.id;
+        console.log('Received /kols command from chatId:', chatId);
+
+        try {
+            // Show loading state
+            const loadingMessageId = await showLoadingState(chatId);
+            kolsPageState.set(chatId, 1);
+
+            // Get active KOLs data with timeout
+            const activeKOLs = await Promise.race([
+                getActiveKOLAccounts(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Request timeout')), 15000)
+                )
+            ]) as KOLAccountWithPnL[] | null;
+
+            // Delete loading message
+            await bot.deleteMessage(chatId, loadingMessageId);
+
+            if (!activeKOLs || activeKOLs.length === 0) {
+                await bot.sendMessage(chatId,
+                    '❌ <b>No Active KOL Data Available</b>\n\n' +
+                    'Unable to fetch KOL trading data at the moment.\n' +
+                    'This might be due to:\n' +
+                    '• API service maintenance\n' +
+                    '• Network connectivity issues\n' +
+                    '• No active traders in the timeframe\n\n' +
+                    'Please try again in a few minutes.',
+                    { parse_mode: 'HTML' }
+                );
+                return;
+            }
+
+            // Sort KOLs by trading volume
+            const sortedKOLs = activeKOLs.sort((a, b) =>
+                b.pnlData.summary.tradesVolumeUsd - a.pnlData.summary.tradesVolumeUsd
+            );
+
+            // Calculate total pages
+            const totalPages = Math.ceil(sortedKOLs.length / KOLS_PER_PAGE);
+
+            // Format message and create keyboard
+            const message = formatKOLsList(sortedKOLs, 1, totalPages);
+            const keyboard = createKOLsPaginationKeyboard(1, totalPages);
+
+            await bot.sendMessage(chatId, message, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } catch (error) {
+            console.error('Error in /kols command:', error);
+
+            // Enhanced error message based on error type
+            let errorMessage = '❌ <b>Error Fetching KOL Data</b>\n\n';
+
+            if (error instanceof Error) {
+                if (error.message === 'Request timeout') {
+                    errorMessage += 'Request timed out. The server is taking too long to respond.\n';
+                } else {
+                    errorMessage += `Error: ${error.message}\n`;
+                }
+            }
+
+            errorMessage += '\nPlease try again in a few moments.';
+
+            await bot.sendMessage(chatId, errorMessage, { parse_mode: 'HTML' });
+        }
+    });
+
+    // Handle pagination callback queries
+    bot.on('callback_query', async (query) => {
+        if (!query.message || !query.data) return;
+
+        const chatId = query.message.chat.id;
+        const messageId = query.message.message_id;
+
+        // Handle KOLs pagination
+        if (query.data.startsWith('kols_page_')) {
+            try {
+                const newPage = parseInt(query.data.split('_')[2]);
+
+                // Show loading indicator
+                await bot.answerCallbackQuery(query.id, {
+                    text: '📊 Loading new page...'
+                });
+
+                // Get active KOLs data
+                const activeKOLs = await getActiveKOLAccounts();
+
+                if (!activeKOLs || activeKOLs.length === 0) {
+                    await bot.answerCallbackQuery(query.id, {
+                        text: '❌ No KOL data available',
+                        show_alert: true
+                    });
+                    return;
+                }
+
+                // Sort KOLs by trading volume
+                const sortedKOLs = activeKOLs.sort((a, b) =>
+                    b.pnlData.summary.tradesVolumeUsd - a.pnlData.summary.tradesVolumeUsd
+                );
+
+                // Calculate total pages
+                const totalPages = Math.ceil(sortedKOLs.length / KOLS_PER_PAGE);
+
+                // Validate page number
+                if (newPage < 1 || newPage > totalPages) {
+                    await bot.answerCallbackQuery(query.id, {
+                        text: '❌ Invalid page number',
+                        show_alert: true
+                    });
+                    return;
+                }
+
+                // Update page state
+                kolsPageState.set(chatId, newPage);
+
+                // Update message with new page
+                const message = formatKOLsList(sortedKOLs, newPage, totalPages);
+                const keyboard = createKOLsPaginationKeyboard(newPage, totalPages);
+
+                await bot.editMessageText(message, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+
+            } catch (error) {
+                console.error('Error handling KOLs pagination:', error);
+                await bot.answerCallbackQuery(query.id, {
+                    text: '❌ Error updating page. Please try /kols again.',
+                    show_alert: true
+                });
+            }
+        }
+    });
+
+    // Add KOL detail view handler
+    bot.onText(/^\/(\d+)$/, async (msg, match) => {
+        if (!match) return; // Handle null match case
+        const chatId = msg.chat.id;
+        const kolNumber = parseInt(match[1]);
+        try {
+            const loadingMessageId = await showLoadingState(chatId);
+            const activeKOLs = await getActiveKOLAccounts();
+            await bot.deleteMessage(chatId, loadingMessageId);
+            if (!activeKOLs || activeKOLs.length === 0) {
+                await bot.sendMessage(chatId, '❌ <b>No KOL Data Available</b>\n\nUnable to fetch KOL trading data at the moment.\nPlease try again in a few minutes.', { parse_mode: 'HTML' });
+                return;
+            }
+            const sortedKOLs = activeKOLs.sort((a, b) => b.pnlData.summary.tradesVolumeUsd - a.pnlData.summary.tradesVolumeUsd);
+            if (kolNumber < 1 || kolNumber > sortedKOLs.length) {
+                await bot.sendMessage(chatId, `❌ <b>Invalid KOL Number</b>\n\nPlease select a number between 1 and ${sortedKOLs.length}.\nUse /kols to see the list of available KOLs.`, { parse_mode: 'HTML' });
+                return;
+            }
+            const kol = sortedKOLs[kolNumber - 1];
+            // Store context for /track_kol
+            lastViewedKOL.set(chatId, kol);
+            const message = formatKOLDetailView(kol, kolNumber);
+            const keyboard = createKOLDetailKeyboard(kolNumber, kol.twitterUrl);
+            if (kol.logoUrl) {
+                await bot.sendPhoto(chatId, kol.logoUrl, { caption: message, parse_mode: 'HTML', reply_markup: keyboard });
+            } else {
+                await bot.sendMessage(chatId, message, { parse_mode: 'HTML', reply_markup: keyboard });
+            }
+        } catch (error) {
+            console.error('Error in KOL detail view:', error);
+            await bot.sendMessage(chatId, '❌ <b>Error Loading KOL Details</b>\n\nUnable to fetch detailed information at the moment.\nPlease try again in a few minutes.', { parse_mode: 'HTML' });
+        }
+    });
+
+    // /track_kol command handler
+    bot.onText(/\/track_kol/, async (msg) => {
+        const chatId = msg.chat.id;
+        const kol = lastViewedKOL.get(chatId);
+        if (!kol) {
+            await bot.sendMessage(chatId, '❌ Please view a KOL\'s details first using /kols, then use /track_kol to track their wallet.');
+            return;
+        }
+        try {
+            // Validate wallet address
+            const walletAddress = kol.ownerAddress;
+            if (!/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(walletAddress)) {
+                await bot.sendMessage(chatId, '❌ This KOL\'s wallet address is invalid or missing.');
+                return;
+            }
+            // Try to add the wallet
+            await addTrackedWallet(db, chatId, walletAddress);
+            await bot.sendMessage(chatId, `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\nView all your tracked wallets with /my_wallets.`, { parse_mode: 'HTML' });
+            // Optionally clear context after success
+            lastViewedKOL.delete(chatId);
+        } catch (error: any) {
+            let errorMsg = '❌ Error tracking this KOL\'s wallet.';
+            if (error instanceof Error && error.message) {
+                if (error.message.includes('maximum limit')) {
+                    errorMsg = `❌ You\'ve reached the maximum limit of tracked wallets. Remove one with /remove_wallet before adding more.`;
+                } else if (error.message.includes('UNIQUE constraint failed')) {
+                    errorMsg = `❌ You are already tracking <b>${kol.name}</b>'s wallet.`;
+                } else {
+                    errorMsg = `❌ ${error.message}`;
+                }
+            }
+            await bot.sendMessage(chatId, errorMsg, { parse_mode: 'HTML' });
+        }
+    });
+
+    // Handle /unsubscribe_kol_updates command
+    bot.onText(/\/unsubscribe_kol_updates/, async (msg) => {
+        const chatId = msg.chat.id;
+        try {
+            await addKolUnsubscription(db, chatId);
+            await bot.sendMessage(chatId, "❌ You will no longer receive Top KOL updates.");
+        } catch (error) {
+            console.error('Error unsubscribing user from KOL updates:', error);
+            await bot.sendMessage(chatId, "❌ An error occurred while trying to unsubscribe.");
+        }
+    });
+
     // Error handling
     bot.on('error', (error) => {
         console.error('Telegram bot error:', error);
@@ -740,3 +1040,235 @@ export function setupBot(db: any) {
 
 // Export the bot instance
 export { bot };
+
+// Helper function to format large numbers
+function formatNumber(num: number): string {
+    if (num >= 1000000) {
+        return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toFixed(0);
+}
+
+// Helper function to format PnL with color indicator
+function formatPnL(pnl: number): string {
+    const prefix = pnl >= 0 ? '+' : '';
+    return `${prefix}$${formatNumber(pnl)}`;
+}
+
+// Add pagination keyboard creator
+function createKOLsPaginationKeyboard(currentPage: number, totalPages: number): TelegramBot.InlineKeyboardMarkup {
+    const buttons: TelegramBot.InlineKeyboardButton[][] = [];
+    const row: TelegramBot.InlineKeyboardButton[] = [];
+
+    if (currentPage > 1) {
+        row.push({
+            text: '⬅️ Previous',
+            callback_data: `kols_page_${currentPage - 1}`
+        });
+    }
+
+    if (currentPage < totalPages) {
+        row.push({
+            text: 'Next ➡️',
+            callback_data: `kols_page_${currentPage + 1}`
+        });
+    }
+
+    if (row.length > 0) {
+        buttons.push(row);
+    }
+
+    return {
+        inline_keyboard: buttons
+    };
+}
+
+// Update KOLs list formatting to remove logo emoji before name
+function formatKOLsList(kols: KOLAccountWithPnL[], page: number, totalPages: number): string {
+    const start = (page - 1) * KOLS_PER_PAGE;
+    const pageKols = kols.slice(start, start + KOLS_PER_PAGE);
+
+    let message = `🏆 <b>Top KOL Traders</b> | Page ${page}/${totalPages}\n\n`;
+
+    pageKols.forEach((kol, index) => {
+        const pnl = kol.pnlData.summary.realizedPnlUsd;
+        const winRate = (kol.pnlData.summary.winRate * 100).toFixed(1);
+        const volume = kol.pnlData.summary.tradesVolumeUsd;
+        const trades = kol.pnlData.summary.tradesCount;
+        const uniqueTokens = kol.pnlData.summary.uniqueTokensTraded;
+        const performanceEmoji = pnl >= 0 ? '🟢' : '🔴';
+        const winRateEmoji = parseFloat(winRate) >= 50 ? '✅' : '⚠️';
+        const bestToken = kol.pnlData.summary.bestPerformingToken;
+        const worstToken = kol.pnlData.summary.worstPerformingToken;
+        // Only show the KOL name, no emoji or logo before it
+        message += `${performanceEmoji} /${start + index + 1} <b>${kol.name}</b>\n`;
+        message += `💰 Volume: $${formatNumber(volume)} | ${winRateEmoji} Win Rate: ${winRate}%\n`;
+        message += `📊 PnL: ${formatPnL(pnl)} | 🎯 Trades: ${trades} | 🔄 Tokens: ${uniqueTokens}\n`;
+        if (bestToken) {
+            message += `⭐️ Best: ${bestToken.tokenSymbol} (${formatPnL(bestToken.pnlUsd)})\n`;
+        }
+        if (worstToken) {
+            message += `📉 Worst: ${worstToken.tokenSymbol} (${formatPnL(worstToken.pnlUsd)})\n`;
+        }
+        message += '\n';
+    });
+
+    message += '💡 <b>Click on the numbers</b> (e.g., /1, /2) to see detailed trading history\n';
+    message += '📊 Sorted by trading volume | Updated in real-time';
+    return message;
+}
+
+// Enhanced loading states
+async function showLoadingState(chatId: number): Promise<number> {
+    const loadingMessage = await bot.sendMessage(chatId,
+        '🔄 <b>Loading KOL Data</b>\n\n' +
+        '⏳ Fetching trader information...\n' +
+        '📊 Calculating performance metrics...\n' +
+        '💫 Preparing display...',
+        { parse_mode: 'HTML' }
+    );
+    return loadingMessage.message_id;
+}
+
+// Trimmed KOL detail view for better UX
+function formatKOLDetailView(kol: KOLAccountWithPnL, kolNumber: number): string {
+    const summary = kol.pnlData.summary;
+    let message = `👤 <b>${kol.name}</b> | KOL #${kolNumber}\n\n`;
+    message += `📊 <b>Performance</b>\n`;
+    message += `PnL: ${formatPnL(summary.realizedPnlUsd)} | Win: ${(summary.winRate * 100).toFixed(1)}% | Trades: ${summary.tradesCount} | Vol: $${formatNumber(summary.tradesVolumeUsd)}\n\n`;
+    if (summary.bestPerformingToken && summary.worstPerformingToken && summary.bestPerformingToken.tokenSymbol === summary.worstPerformingToken.tokenSymbol) {
+        message += `⭐️ <b>Best/Worst Token</b>: ${summary.bestPerformingToken.tokenSymbol} (${formatPnL(summary.bestPerformingToken.pnlUsd)}/${formatPnL(summary.worstPerformingToken.pnlUsd)})\n\n`;
+    } else {
+        if (summary.bestPerformingToken) {
+            message += `⭐️ <b>Best Token</b>: ${summary.bestPerformingToken.tokenSymbol} (${formatPnL(summary.bestPerformingToken.pnlUsd)})\n`;
+        }
+        if (summary.worstPerformingToken) {
+            message += `📉 <b>Worst</b>: ${summary.worstPerformingToken.tokenSymbol} (${formatPnL(summary.worstPerformingToken.pnlUsd)})\n`;
+        }
+        if (summary.bestPerformingToken || summary.worstPerformingToken) message += '\n';
+    }
+    if (kol.pnlData.tokenMetrics && kol.pnlData.tokenMetrics.length > 0) {
+        message += `📈 <b>Top Tokens</b>\n`;
+        const topTokens = kol.pnlData.tokenMetrics
+            .sort((a, b) => (b.buys.volumeUsd + b.sells.volumeUsd) - (a.buys.volumeUsd + a.sells.volumeUsd))
+            .slice(0, 3);
+        topTokens.forEach((token, index) => {
+            const totalVolume = token.buys.volumeUsd + token.sells.volumeUsd;
+            const totalTrades = token.buys.transactionCount + token.sells.transactionCount;
+            message += `${index + 1}. ${token.tokenSymbol}: $${formatNumber(totalVolume)} (${totalTrades})\n`;
+        });
+        message += '\n';
+    }
+    if (summary.pnlTrendSevenDays && summary.pnlTrendSevenDays.length > 0) {
+        message += `🗓 <b>7d PnL</b>\n`;
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const last3 = summary.pnlTrendSevenDays.slice(-3);
+        last3.forEach(([timestamp, pnl]) => {
+            const date = new Date(timestamp * 1000);
+            const dayName = days[date.getDay()];
+            message += `${dayName}: ${formatPnL(pnl)} | `;
+        });
+        message = message.replace(/ \| $/, '\n');
+    }
+    message += '\n\u2795 Use /track_kol to track this KOL\'s wallet trades.';
+    message += '\n<b>Use /kols to return to the list view</b>';
+    return message;
+}
+
+// Update keyboard for KOL detail view to remove 'Back to List' button
+function createKOLDetailKeyboard(kolNumber: number, twitterUrl?: string): TelegramBot.InlineKeyboardMarkup {
+    const buttons: TelegramBot.InlineKeyboardButton[][] = [];
+    if (twitterUrl) {
+        buttons.push([
+            {
+                text: 'View on X',
+                url: twitterUrl
+            }
+        ]);
+    }
+    return { inline_keyboard: buttons };
+}
+
+// --- Phase 4 Functions (Notification Delivery) ---
+
+// Define a type for the change data (adjust as needed based on Phase 3)
+export interface KOLChangeData {
+    newNumberOne?: { name: string; address: string };
+    newEntrantsTop5?: { name: string; address: string }[];
+}
+
+// Format KOL update message
+function formatKOLUpdateMessage(changeData: KOLChangeData): string {
+    let message = `🏆 <b>KOL Ranking Update!</b> 🏆\n`;
+    let changesExist = false;
+
+    if (changeData.newNumberOne) {
+        message += `\n🥇 New #1: <b>${changeData.newNumberOne.name}</b> is now leading the charts!\n`;
+        changesExist = true;
+    }
+
+    if (changeData.newEntrantsTop5 && changeData.newEntrantsTop5.length > 0) {
+        message += `\n🚀 New in Top 5:\n`;
+        changeData.newEntrantsTop5.forEach(kol => {
+            message += `- ${kol.name}\n`;
+        });
+        changesExist = true;
+    }
+
+    if (!changesExist) {
+        return ''; // No significant changes to report
+    }
+
+    message += `\nUse /kols to see the full list.`;
+    return message;
+}
+
+// Broadcast KOL updates to subscribed users
+// Note: This function needs to be called by the Phase 3 background job
+export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
+    const message = formatKOLUpdateMessage(changes);
+    if (!message) {
+        console.log('No significant KOL changes to broadcast.');
+        return;
+    }
+
+    try {
+        const allUserIds = await getAllUserIds(db);
+        const unsubscribedUserIds = await getKolUnsubscribedUserIds(db);
+        const unsubscribedSet = new Set(unsubscribedUserIds);
+
+        const targetUserIds = allUserIds.filter(userId => !unsubscribedSet.has(userId));
+
+        console.log(`Broadcasting KOL update to ${targetUserIds.length} users...`);
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const userId of targetUserIds) {
+            try {
+                await bot.sendMessage(userId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
+                successCount++;
+                // Rate limiting delay
+                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+            } catch (error: any) {
+                errorCount++;
+                console.error(`Failed to send KOL update to user ${userId}:`, error.message || error);
+                // If user blocked the bot (error code 403), unsubscribe them
+                if (error.response?.statusCode === 403 || error.message?.includes('Forbidden')) {
+                    console.log(`User ${userId} blocked the bot. Unsubscribing from KOL updates.`);
+                    try {
+                        await addKolUnsubscription(db, userId);
+                    } catch (unsubError) {
+                        console.error(`Failed to auto-unsubscribe user ${userId}:`, unsubError);
+                    }
+                }
+            }
+        }
+
+        console.log(`Broadcast completed. ${successCount} users received the update, ${errorCount} errors occurred.`);
+    } catch (error) {
+        console.error('Error broadcasting KOL updates:', error);
+    }
+}
