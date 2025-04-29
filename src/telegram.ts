@@ -1227,7 +1227,6 @@ function formatKOLUpdateMessage(changeData: KOLChangeData): string {
 }
 
 // Broadcast KOL updates to subscribed users
-// Note: This function needs to be called by the Phase 3 background job
 export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
     const message = formatKOLUpdateMessage(changes);
     if (!message) {
