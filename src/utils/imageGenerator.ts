@@ -2,64 +2,221 @@
 import { createCanvas, loadImage, registerFont, CanvasRenderingContext2D, Image as CanvasImage, Canvas } from 'canvas';
 import * as path from 'path'; // Use import for path
 import * as fs from 'fs'; // Add fs import
-// Assuming your actual data fetching function exists and returns a specific type
-// import { fetchActualTokenData, TokenData } from './your-api-module'; // Import your data fetching logic and type
+import { TokenDetails, getAllTrackedTokenPrices, getTokenPrices } from '../vybeApi';
+import { TRACKED_TOKENS } from '../config';
 
-// Define an interface for your token data structure (if not imported)
-interface TokenData {
-    symbol: string;
-    // name?: string; // Optional if you don't draw it
-    priceChange24h: number;
-    priceChange7d: number;
+// Register Montserrat font if available
+try {
+    const fontPath = path.join(__dirname, '..', 'fonts', 'Montserrat-Bold.ttf');
+    if (fs.existsSync(fontPath)) {
+        registerFont(fontPath, { family: 'Montserrat', weight: 'bold' });
+        console.log('Montserrat font registered.');
+    }
+} catch (fontError) {
+    console.warn("Could not register Montserrat font. Ensure the TTF is available in src/fonts.", fontError);
 }
 
-// Optional: Register font if not installed globally on server
-// Adjust path as needed
-// try {
-//   registerFont(path.join(__dirname, '..', 'fonts', 'arial.ttf'), { family: 'Arial' });
-// } catch (fontError) {
-//   console.warn("Could not register font. Ensure 'Arial' is installed on the server.", fontError);
-// }
+// Define interface for token data used in image generation
+interface TokenData {
+    symbol: string;
+    name: string;
+    price: number;
+    price1d: number;
+    price7d: number;
+    logoUrl: string;
+    marketCap: number;
+}
 
-// Main function to generate the image
-export async function generatePriceBoardImage(): Promise<Buffer> {
+// Function to transform Vybe API token data to our image generation format
+function transformTokenData(tokenDetails: TokenDetails): TokenData {
+    return {
+        symbol: tokenDetails.symbol,
+        name: tokenDetails.name,
+        price: tokenDetails.price,
+        price1d: tokenDetails.price1d,
+        price7d: tokenDetails.price7d,
+        logoUrl: tokenDetails.logoUrl,
+        marketCap: tokenDetails.marketCap
+    };
+}
+
+// Configuration interface for image generation
+interface ImageConfig {
+    limit?: number;              // Number of tokens to display (default: 10)
+    specificTokens?: string[];   // Specific tokens to include (optional)
+    timeframes?: {               // Time periods for comparison
+        shortTerm?: number;      // Default: 24h
+        longTerm?: number;       // Default: 7d
+    };
+    sortBy?: 'marketCap' | 'volume' | 'priceChange'; // Sorting method
+    sortOrder?: 'asc' | 'desc';  // Sort order
+}
+
+// Default configuration
+const DEFAULT_CONFIG: ImageConfig = {
+    limit: 10,
+    timeframes: {
+        shortTerm: 24,
+        longTerm: 168 // 7 days in hours
+    },
+    sortBy: 'marketCap',
+    sortOrder: 'desc'
+};
+
+// Cache configuration
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+
+class TokenDataCache {
+    private static instance: TokenDataCache;
+    private cache: Map<string, CacheEntry<TokenData[]>>;
+    private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    private constructor() {
+        this.cache = new Map();
+    }
+
+    public static getInstance(): TokenDataCache {
+        if (!TokenDataCache.instance) {
+            TokenDataCache.instance = new TokenDataCache();
+        }
+        return TokenDataCache.instance;
+    }
+
+    public get(key: string): TokenData[] | null {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+
+        const now = Date.now();
+        if (now - entry.timestamp > this.CACHE_DURATION) {
+            this.cache.delete(key);
+            return null;
+        }
+
+        return entry.data;
+    }
+
+    public set(key: string, data: TokenData[]): void {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now()
+        });
+    }
+
+    public clear(): void {
+        this.cache.clear();
+    }
+}
+
+// Error types
+class ImageGenerationError extends Error {
+    constructor(message: string, public readonly code: string) {
+        super(message);
+        this.name = 'ImageGenerationError';
+    }
+}
+
+// Function to fetch and prepare token data for image generation
+async function fetchTokenData(config: ImageConfig = DEFAULT_CONFIG): Promise<TokenData[]> {
+    const cache = TokenDataCache.getInstance();
+    const cacheKey = JSON.stringify(config);
+
     try {
-        // --- Fetch REAL Data ---
-        // Replace with your actual data fetching:
-        // const tokenData: TokenData[] = await fetchActualTokenData();
-        // Using mock data for example structure:
-        const tokenData: TokenData[] = [
-            { symbol: 'BONK', priceChange24h: 6.2, priceChange7d: 20.5 },
-            { symbol: 'JUP', priceChange24h: 3.8, priceChange7d: 15.3 },
-            { symbol: 'WIF', priceChange24h: -2.4, priceChange7d: 43.6 },
-            { symbol: 'PYTH', priceChange24h: 0.5, priceChange7d: 8.1 },
-            { symbol: 'RAY', priceChange24h: 4.1, priceChange7d: 10.4 },
-            { symbol: 'ORCA', priceChange24h: 1.9, priceChange7d: -2.0 },
-            { symbol: 'HNT', priceChange24h: -3.3, priceChange7d: -5.6 },
-            { symbol: 'MNDE', priceChange24h: 7.4, priceChange7d: 17.1 },
-            { symbol: 'JTO', priceChange24h: 5.0, priceChange7d: 26.8 },
-            { symbol: 'SLERF', priceChange24h: -1.8, priceChange7d: 4.7 },
-        ]; // Ensure this matches your TokenData interface
+        // Try to get data from cache first
+        const cachedData = cache.get(cacheKey);
+        if (cachedData) {
+            console.log('Using cached token data');
+            return cachedData;
+        }
+
+        console.log('Fetching token data using TRACKED_TOKENS');
+        const tokenMap = await getTokenPrices(TRACKED_TOKENS);
+        const tokenPrices = Array.from(tokenMap.values());
+
+        if (!tokenPrices || tokenPrices.length === 0) {
+            throw new ImageGenerationError('No token data available from API', 'NO_DATA');
+        }
+
+        // Transform tokens
+        let transformedTokens = tokenPrices
+            .map(token => transformTokenData(token as unknown as TokenDetails));
+
+        // Filter specific tokens if provided
+        if (config.specificTokens && config.specificTokens.length > 0) {
+            transformedTokens = transformedTokens.filter(token =>
+                config.specificTokens!.includes(token.symbol)
+            );
+
+            if (transformedTokens.length === 0) {
+                throw new ImageGenerationError('No matching tokens found for specified symbols', 'NO_MATCHING_TOKENS');
+            }
+        }
+
+        // Sort tokens based on configuration
+        transformedTokens.sort((a, b) => {
+            let comparison = 0;
+            switch (config.sortBy) {
+                case 'marketCap':
+                    comparison = b.marketCap - a.marketCap;
+                    break;
+                case 'volume':
+                    comparison = 0;
+                    break;
+                case 'priceChange':
+                    const aChange = ((a.price - a.price1d) / a.price1d) * 100;
+                    const bChange = ((b.price - b.price1d) / b.price1d) * 100;
+                    comparison = bChange - aChange;
+                    break;
+            }
+            return config.sortOrder === 'desc' ? comparison : -comparison;
+        });
+
+        // Apply limit
+        const result = transformedTokens.slice(0, config.limit);
+
+        // Cache the result
+        cache.set(cacheKey, result);
+
+        return result;
+    } catch (error) {
+        if (error instanceof ImageGenerationError) {
+            throw error;
+        }
+        throw new ImageGenerationError(
+            `Error fetching token data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'FETCH_ERROR'
+        );
+    }
+}
+
+export async function generatePriceBoardImage(config: ImageConfig = DEFAULT_CONFIG): Promise<Buffer> {
+    try {
+        // Fetch token data based on configuration
+        const tokenData: TokenData[] = await fetchTokenData(config);
 
         if (!tokenData || tokenData.length === 0) {
-            throw new Error("No token data fetched");
+            throw new ImageGenerationError("No token data available", "NO_DATA");
         }
 
         // --- Load Base Image ---
-        // Use a path relative to the project root instead of __dirname
-        const projectRoot = path.resolve(__dirname, '..', '..'); // Go up from dist/utils to project root
+        const projectRoot = path.resolve(__dirname, '..', '..');
         const imagePath = path.join(projectRoot, 'src', 'utils', 'blank_board.png');
 
-        // Check if file exists
         if (!fs.existsSync(imagePath)) {
-            throw new Error(`Image not found at path: ${imagePath}`);
+            throw new ImageGenerationError(`Image not found at path: ${imagePath}`, "MISSING_TEMPLATE");
         }
 
         console.log(`Attempting to load image from: ${imagePath}`);
         const baseImage: CanvasImage = await loadImage(imagePath);
 
         // --- Create Canvas ---
-        const canvas: Canvas = createCanvas(baseImage.width, baseImage.height);
+        // Make canvas height dynamic based on number of tokens
+        const baseHeight = baseImage.height;
+        const lineHeight = 50;
+        const extraHeight = Math.max(0, (tokenData.length - 10) * lineHeight);
+        const canvas: Canvas = createCanvas(baseImage.width, baseHeight + extraHeight);
         const ctx: CanvasRenderingContext2D = canvas.getContext('2d');
 
         // --- PASTE YOUR FINALIZED DRAWING LOGIC HERE ---
@@ -67,7 +224,7 @@ export async function generatePriceBoardImage(): Promise<Buffer> {
         ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
 
         // --- Parameters ---
-        const fontFamily: string = '"Arial", sans-serif'; // ENSURE FONT AVAILABILITY
+        const fontFamily: string = '"Arial", sans-serif';
         const baseFontSize: number = 29;
         const titleFontSize: number = 36;
         const headerFontSize: number = 23;
@@ -78,7 +235,6 @@ export async function generatePriceBoardImage(): Promise<Buffer> {
         const startY: number = 280;
         const colOffsets = { symbol: 0, change24h: 185, change7d: 345 };
         const numberColumnWidth: number = 100;
-        const lineHeight: number = 50;
         const headerYOffset: number = -68;
         const titleYOffset: number = -128;
         const headerLineSpacing: number = 27;
@@ -113,18 +269,30 @@ export async function generatePriceBoardImage(): Promise<Buffer> {
         ctx.fillText('(7d)', header3X, startY + headerYOffset + headerLineSpacing);
 
         // Draw Data Rows
-        ctx.font = `${baseFontSize}px ${fontFamily}`;
+        ctx.font = `bold ${baseFontSize}px ${fontFamily}`;
         tokenData.forEach((token: TokenData, index: number) => {
             const currentY: number = startY + (index * lineHeight);
             ctx.fillStyle = baseTextColor;
             ctx.textAlign = 'left';
             ctx.fillText(token.symbol, startX + colOffsets.symbol, currentY);
             ctx.textAlign = 'right';
-            const change24hText: string = `${token.priceChange24h >= 0 ? '+' : ''}${token.priceChange24h.toFixed(1)}%`;
-            ctx.fillStyle = token.priceChange24h >= 0 ? positiveColor : negativeColor;
+
+            // Calculate price changes
+            const priceChange24h = ((token.price - token.price1d) / token.price1d) * 100;
+            const priceChange7d = ((token.price - token.price7d) / token.price7d) * 100;
+
+            // Format for Infinity
+            const formatChange = (change: number) => {
+                if (!isFinite(change)) return '+100%';
+                return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+            };
+
+            const change24hText: string = formatChange(priceChange24h);
+            ctx.fillStyle = priceChange24h >= 0 ? positiveColor : negativeColor;
             ctx.fillText(change24hText, header2X, currentY);
-            const change7dText: string = `${token.priceChange7d >= 0 ? '+' : ''}${token.priceChange7d.toFixed(1)}%`;
-            ctx.fillStyle = token.priceChange7d >= 0 ? positiveColor : negativeColor;
+
+            const change7dText: string = formatChange(priceChange7d);
+            ctx.fillStyle = priceChange7d >= 0 ? positiveColor : negativeColor;
             ctx.fillText(change7dText, header3X, currentY);
         });
 
@@ -139,11 +307,20 @@ export async function generatePriceBoardImage(): Promise<Buffer> {
 
     } catch (error) {
         console.error("Error generating price board image:", error);
-        // Enhance error logging or handling if needed
         if (error instanceof Error) {
             throw new Error(`Image generation failed: ${error.message}`);
         } else {
             throw new Error(`An unknown error occurred during image generation.`);
         }
     }
+}
+
+if (require.main === module) {
+    fetchTokenData({
+        limit: 10,
+        sortBy: 'marketCap',
+        sortOrder: 'desc'
+    }).then(tokens => {
+        console.log(tokens);
+    });
 }

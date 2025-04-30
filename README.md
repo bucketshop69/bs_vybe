@@ -1,123 +1,100 @@
-# bs_vybe
+# Vybe Telegram Bot (bs_vybe)
 
-## Command: /track_wallet
+## 🚀 Overview
 
-The `/track_wallet` command allows you to track Solana wallet addresses for new transfer activity. Below are the related commands and their usage:
+This Telegram bot provides real-time insights and alerts based on data from the Vybe API, focusing on Solana Key Opinion Leaders (KOLs) and token price movements. It allows users to track top traders, monitor their wallets, and set custom price alerts for specific tokens.
 
-### Track a Wallet
-- **Command:** `/track_wallet`
-- **Description:** Initiates the process to track a new Solana wallet address. The bot will prompt you to paste the wallet address you want to track.
-- **Validation:** The address must be a valid 44-character Solana base58 address.
-- **Limit:** You can track up to 5 wallets per user.
+## ✨ Features
 
-### View Tracked Wallets
-- **Command:** `/my_wallets`
-- **Description:** Lists all Solana wallets you are currently tracking, including the date tracking started and any labels.
+*   **KOL Tracking:** View ranked lists of top KOL traders, see their performance metrics (PnL, win rate, volume), view detailed profiles, and track their wallets for trade alerts. Includes periodic updates on ranking changes.
+*   **Token Price Alerts:**
+    *   Track specific tokens (by symbol or address) for significant price movement alerts.
+    *   Set custom price targets (above or below current price) for specific tokens.
+    *   View and manage active alerts.
+*   **Wallet Tracking:** Track specific Solana wallet addresses (initially focused on KOL wallets, but potentially extensible).
+*   **Interactive Interface:** Uses Telegram commands and inline keyboards for navigation (e.g., pagination for KOL lists).
+*   **Real-time Data:** Leverages the Vybe API for up-to-date KOL and token information.
+*   **Notifications:** Sends alerts directly to users via Telegram for tracked events (price movements, KOL trades, KOL ranking changes).
+*   **Image Generation:** Can generate images (e.g., price boards - currently via `/prices`).
 
-### Remove a Tracked Wallet
-- **Command:** `/remove_wallet`
-- **Description:** Initiates the process to stop tracking a wallet. The bot will prompt you to paste the wallet address you want to remove from tracking.
+## 🔧 Setup & Installation
 
-**Note:**
-- You will receive notifications for new transfers on any wallet you are tracking (excluding spam addresses).
-- Use these commands to manage your tracked wallets efficiently.
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd bs_vybe
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
+3.  **Environment Variables:**
+    *   Create a `.env` file in the project root.
+    *   Add the required environment variables:
+        ```dotenv
+        # .env
+        VYBE_TELEGRAM_BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
+        VYBE_KEY="YOUR_VYBE_API_KEY"
+        # Add any other required variables (e.g., database connection string if applicable)
+        ```
+    *   Refer to `env-rule` documentation for details. **Never commit the `.env` file.**
+4.  **Build the code (if using TypeScript):**
+    ```bash
+    npm run build
+    # or
+    yarn build
+    ```
+5.  **Run the bot:**
+    ```bash
+    npm start
+    # or
+    yarn start
+    # or directly using node if applicable
+    # node dist/index.js
+    ```
 
-## Token Price Alerts
+## 🤖 Commands
 
-This bot offers two types of token price alerts:
+### General
+*   `/start`: Displays the welcome message and core command overview.
+*   `/help`: Shows a detailed list of available commands and their usage.
 
-1.  **User-Set Target Alerts:** You can set specific price targets for tokens you are interested in.
-2.  **Automatic General Alerts:** The bot monitors a predefined list of globally tracked tokens for significant price movements.
+### KOL Tracking
+*   `/kols`: Shows a paginated list of top KOL traders, sorted by trading volume, with performance summaries. Click number commands (e.g., `/1`, `/2`) to view details.
+*   `/track_kol`: (After viewing a KOL's detail with `/1`, `/2`, etc.) Starts tracking the viewed KOL's wallet for trade alerts.
+*   `/unsubscribe_kol_updates`: Opts out of receiving periodic KOL ranking change notifications.
 
-### User-Set Target Alerts: Multi-Step Commands
+### Token Price Alerts
+*   `/track_token`: Initiates tracking a token (enter symbol or address when prompted) for significant price movement alerts.
+*   `/set_alert`: Initiates setting a specific price target alert for a token (enter symbol/address and then target price when prompted).
+*   `/my_alerts`: Displays your currently active price target alerts with their status and IDs.
+*   `/remove_alert`: Initiates removing a specific price target alert (enter the alert ID when prompted).
 
-The following commands allow you to manage your personal price target alerts using a user-friendly, multi-step interaction flow:
+### Wallet Tracking (Limited Scope Currently)
+*   `/tracked_wallets`: Shows the list of wallets you are currently tracking, distinguishing between KOL and other wallets.
+*   `/remove_wallet`: Initiates removing a wallet from your tracked list (enter the wallet address when prompted).
+*   `/track_wallet`: (Manual entry) Initiates tracking a specific Solana wallet address (enter the address when prompted). *Note: Primary tracking is intended via `/track_kol`.*
 
-#### Track a Token (Optional Subscription)
-- **Command:** `/track_token`
-- **Description:** Previously used to track tokens, this command might be repurposed or removed as general alerts are now global. *Note: This command's current functionality might differ from this description based on implementation details.*
-- **Flow:**
-  1. User types `/track_token`
-  2. Bot prompts: "Please enter the token symbol or address you want to track."
-  3. User replies with the symbol/address
-  4. Bot confirms and sets up tracking
+### Other
+*   `/testdigest`: (For Testing) Fetches and displays a sample DEX data digest.
+*   `/prices`: (For Testing/Showcase) Generates and displays an image board of Solana token prices.
 
-#### Set a Price Alert
-- **Command:** `/set_alert`
-- **Description:** Initiates the process to set a specific price target alert for *any* token (not just globally tracked ones). The bot will prompt you for the token symbol/address, then for the target price.
-- **Flow:**
-  1. User types `/set_alert`
-  2. Bot prompts: "Please enter the token symbol or address for your price alert."
-  3. User replies with the symbol/address
-  4. Bot prompts: "Please enter your target price for the alert."
-  5. User replies with the price
-  6. Bot confirms and sets the alert
+## 🏛️ Architecture Overview
 
-#### View Your Alerts
-- **Command:** `/my_alerts`
-- **Description:** Lists all your active *user-set price target alerts* and their IDs.
+*   **`src/telegram.ts`:** Main bot logic, handles commands, user interactions, message formatting, and integration with other modules.
+*   **`src/vybeApi.ts`:** Interacts with the external Vybe API to fetch KOL and token data.
+*   **`src/database.ts`:** Manages database interactions for storing user subscriptions, tracked wallets, alerts, etc. (Specific implementation details depend on the database used).
+*   **`src/tokenPriceService.ts`:** Handles fetching and potentially caching token price information.
+*   **`src/tokenAlerts.ts`:** Logic for checking and triggering price alerts.
+*   **`src/utils/imageGenerator.ts`:** Utility for creating image-based outputs (like price boards).
+*   **`.env`:** Stores sensitive configuration like API keys and bot tokens.
 
-#### Remove a Price Alert
-- **Command:** `/remove_alert`
-- **Description:** Initiates the process to remove a price alert. The bot will prompt you for the alert ID.
-- **Flow:**
-  1. User types `/remove_alert`
-  2. Bot prompts: "Please enter the ID of the alert you want to remove."
-  3. User replies with the alert ID
-  4. Bot confirms removal
+## TODO / Future Enhancements
 
-### Automatic General Price Movement Alerts
-
-- **Description:** The bot automatically monitors a predefined list of important tokens (e.g., SOL, JUP, BONK, etc., defined in the bot's configuration).
-- **Trigger:** An alert is triggered when one of these tracked tokens experiences a price change exceeding a configured percentage threshold (e.g., +/- 3%) within the polling interval.
-- **Recipients:** These general alerts are broadcast to **all registered users** of the bot.
-- **Noise Reduction:** To avoid excessive notifications, the bot uses intelligent logic. Once an alert is sent for a token crossing the threshold in a specific direction (up or down), further alerts for that same direction are suppressed until the price moves back within the threshold or reverses direction significantly.
-
-**Note:**
-- User-set alerts (`/set_alert`) are personal and only notify you.
-- General alerts are automatic broadcasts about significant moves in globally tracked tokens.
-
-## Deployment
-
-### Deploying to Render (Free Tier)
-
-This bot can be easily deployed to Render.com's free tier:
-
-1. Fork or push this repository to your GitHub account.
-
-2. Sign up for a free account on [Render](https://render.com) and connect your GitHub account.
-
-3. **IMPORTANT**: Add a persistent disk BEFORE creating the service:
-   - In your Render dashboard, go to "Disks" in the left sidebar and create a new disk
-   - Name: `data`
-   - Mount Path: `/data`
-   - Size: 1 GB (minimum)
-   - Note: Make sure to wait for disk creation to complete before proceeding
-
-4. Create a new Web Service:
-   - Select your repository
-   - Build Command: `npm install && npm run build`
-   - Start Command: `npm start`
-   - Select the Free plan
-   - Root Directory: `/` (the repository root)
-
-5. Add the following environment variables:
-   - `VYBE_TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather
-   - `VYBE_KEY`: Your API key for Vybe Network
-   - `DATABASE_PATH`: `/data/vybe_bot.db`
-
-6. Under "Advanced" settings, attach the disk you created in step 3 to this service:
-   - Find the "Disks" section
-   - Click "Attach Disk"
-   - Select the disk you created earlier
-   - Ensure the mount path is set to `/data`
-
-7. Click "Create Web Service" to deploy.
-
-**Troubleshooting**:
-- If you see a `SQLITE_CANTOPEN` or permission errors, check if the disk is properly attached to your service
-- If the application starts using `./vybe_bot.db` instead of `/data/vybe_bot.db`, this indicates a fallback due to permission issues with the disk
-- You can verify disk attachment in your service settings under the "Disks" section
-- Free Render services "spin down" after inactivity, which may cause a slight delay on the first interaction
-- The database file will be stored on the persistent disk to ensure data is preserved between deployments
-- Render will automatically redeploy when you push changes to your repository
+*   Refine wallet tracking beyond KOLs.
+*   Expand alert types (e.g., volume changes, new token listings).
+*   Add more data visualizations.
+*   Implement robust error handling and logging.
+*   Consider user configuration options (e.g., alert thresholds). 

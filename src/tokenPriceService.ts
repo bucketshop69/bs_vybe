@@ -2,14 +2,13 @@ import { getAllTrackedTokenPrices, getTokenPrice, calculatePriceChangePercent } 
 import {
     TokenPrice,
     initializeTokenPriceCache,
-    addPriceHistoryEntry,
     getAllTokenPrices,
     getAllUserIds,
     getActiveAlertsForToken,
     markAlertAsTriggered,
     UserPriceAlert
 } from './database';
-import { TRACKED_TOKENS, PRICE_ALERT_CONFIG } from './config';
+import { PRICE_ALERT_CONFIG } from './config';
 
 // Global variables for service state
 let isPolling = false;

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { initializeDatabase } from './database';
 import WorkerManager, { WorkerType, WorkerManagerEvent } from './workerManager';
+import { startKolRankingService } from './kolRankingService';
 
 /**
  * Start the application with worker threads
@@ -115,8 +116,9 @@ async function startApp() {
             console.log(`Wallet activity detected for ${walletAddress}:`, activity);
         });
 
-        // Once we have more workers implemented, we would start them here:
-        // await workerManager.startWorker(WorkerType.ALERT_PROCESSING);
+        // Start the KOL ranking check service
+        console.log('Starting KOL ranking service...');
+        await startKolRankingService(db);
 
         console.log('All workers started successfully');
     } catch (error) {

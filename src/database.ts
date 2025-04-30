@@ -4,6 +4,7 @@ import { walletLog } from './logger';
 import { TRACKED_TOKENS, PRICE_ALERT_CONFIG } from './config';
 import fs from 'fs';
 import path from 'path';
+import { KnownAccount } from './vybeApi'; // Import KnownAccount type
 
 // Token price interfaces
 export interface TokenPrice {
@@ -165,6 +166,26 @@ export async function initializeDatabase() {
             )
         `);
 
+        // Table for users who opted out of KOL updates
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS kol_update_unsubscriptions (
+                user_id INTEGER PRIMARY KEY, -- Telegram User/Chat ID that has opted OUT
+                unsubscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            );
+        `);
+
+        // Table to store the previous Top N KOL ranking state
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS previous_top_kols (
+                rank INTEGER PRIMARY KEY, -- e.g., 1 to 10
+                owner_address TEXT NOT NULL UNIQUE, -- Ensure address is unique if rank isn't the only key
+                name TEXT,
+                last_checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        console.log('Database tables checked/created successfully.');
         return db;
     } catch (error) {
         console.error(`Error initializing database: ${error}`);
@@ -596,5 +617,88 @@ export async function getActiveAlertsForToken(db: any, mintAddress: string): Pro
     } catch (error) {
         console.error(`Error getting active alerts for token ${mintAddress}:`, error);
         return [];
+    }
+}
+
+// Add a user to the KOL update unsubscription list
+export async function addKolUnsubscription(db: any, userId: number): Promise<boolean> {
+    try {
+        // Ensure user exists first
+        await db.run('INSERT OR IGNORE INTO users (user_id) VALUES (?)', [userId]);
+        // Add to unsubscription list
+        const result = await db.run(
+            'INSERT OR IGNORE INTO kol_update_unsubscriptions (user_id) VALUES (?)',
+            [userId]
+        );
+        return result.changes > 0; // Return true if a new unsubscription was added
+    } catch (error) {
+        console.error(`Error adding KOL unsubscription for user ${userId}:`, error);
+        throw error; // Re-throw error to be handled by the caller
+    }
+}
+
+// Get all user IDs who have unsubscribed from KOL updates
+export async function getKolUnsubscribedUserIds(db: any): Promise<number[]> {
+    try {
+        const rows = await db.all('SELECT user_id FROM kol_update_unsubscriptions');
+        return rows.map((row: { user_id: number }) => row.user_id);
+    } catch (error) {
+        console.error('Error fetching KOL unsubscribed user IDs:', error);
+        return [];
+    }
+}
+
+// Define interface for previous KOL ranking entry
+interface PreviousKOL {
+    rank: number;
+    owner_address: string;
+    name: string | null;
+    last_checked_at: string;
+}
+
+// Get the previously stored top KOLs ranking
+export async function getPreviousTopKols(db: any): Promise<PreviousKOL[]> {
+    try {
+        const rows = await db.all('SELECT rank, owner_address, name, last_checked_at FROM previous_top_kols ORDER BY rank ASC');
+        return rows;
+    } catch (error) {
+        console.error('Error fetching previous top KOLs:', error);
+        return [];
+    }
+}
+
+// Update the stored top KOLs ranking
+// Expects an array of KOL accounts, ordered by rank (index 0 is rank 1)
+export async function updatePreviousTopKols(db: any, currentTopKols: KnownAccount[]): Promise<void> {
+    try {
+        // Use a transaction for atomic update
+        await db.exec('BEGIN TRANSACTION');
+
+        // Clear the previous ranking
+        await db.exec('DELETE FROM previous_top_kols');
+
+        // Insert the new ranking
+        const stmt = await db.prepare(
+            'INSERT INTO previous_top_kols (rank, owner_address, name, last_checked_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+        );
+        for (let i = 0; i < currentTopKols.length; i++) {
+            const kol = currentTopKols[i];
+            await stmt.run(i + 1, kol.ownerAddress, kol.name);
+        }
+        await stmt.finalize();
+
+        // Commit the transaction
+        await db.exec('COMMIT');
+        console.log(`Updated previous_top_kols table with ${currentTopKols.length} entries.`);
+    } catch (error) {
+        console.error('Error updating previous top KOLs:', error);
+        // Rollback transaction on error
+        try {
+            await db.exec('ROLLBACK');
+        } catch (rollbackError) {
+            console.error('Error rolling back transaction:', rollbackError);
+        }
+        // Optionally re-throw the original error
+        // throw error;
     }
 } 
