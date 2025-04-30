@@ -1,5 +1,7 @@
 # Vybe Telegram Bot (bs_vybe)
 
+**Access the live bot here:** [https://t.me/bs_vybe_bot](https://t.me/bs_vybe_bot)
+
 ## 🚀 Overview
 
 This Telegram bot provides real-time insights and alerts based on data from the Vybe API, focusing on Solana Key Opinion Leaders (KOLs) and token price movements. It allows users to track top traders, monitor their wallets, and set custom price alerts for specific tokens.
@@ -15,7 +17,7 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   **Interactive Interface:** Uses Telegram commands and inline keyboards for navigation (e.g., pagination for KOL lists).
 *   **Real-time Data:** Leverages the Vybe API for up-to-date KOL and token information.
 *   **Notifications:** Sends alerts directly to users via Telegram for tracked events (price movements, KOL trades, KOL ranking changes).
-*   **Image Generation:** Can generate images (e.g., price boards - currently via `/prices`).
+*   **Automated Insights:** Can generate automated price chart snapshots and KOL activity summaries.
 
 ## 🔧 Setup & Installation
 
@@ -77,9 +79,9 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   `/remove_wallet`: Initiates removing a wallet from your tracked list (enter the wallet address when prompted).
 *   `/track_wallet`: (Manual entry) Initiates tracking a specific Solana wallet address (enter the address when prompted). *Note: Primary tracking is intended via `/track_kol`.*
 
-### Other
-*   `/testdigest`: (For Testing) Fetches and displays a sample DEX data digest.
-*   `/prices`: (For Testing/Showcase) Generates and displays an image board of Solana token prices.
+### Other (Testing/Internal)
+*   `/testdigest`: Fetches and displays a sample DEX data digest.
+*   `/prices`: Generates and displays an image board of Solana token prices.
 
 ## 🏛️ Architecture Overview
 
