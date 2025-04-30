@@ -72,8 +72,6 @@ bot.setMyCommands([
     { command: 'kols', description: 'View top KOL traders and their performance' },
     { command: 'track_token', description: 'Track a token for price alerts' },
     { command: 'set_alert', description: 'Set price target alert for a token' },
-    { command: 'unsubscribe_kol_updates', description: 'Stop receiving KOL ranking updates' },
-    { command: 'tracked_wallets', description: 'View your tracked wallets' },
 ]).then(() => {
     console.log('Bot commands menu set successfully');
 }).catch((error) => {
@@ -106,39 +104,23 @@ export function setupBot(db: any) {
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
         console.log('Received /start command from chatId:', chatId);
-        await bot.sendMessage(chatId,
-            `🚀 <b>Welcome to the bs_vybe Bot!</b> 🚀\n\n` +
 
-            `<b>📱 WALLET TRACKING</b>\n` +
-            `/tracked_wallets - View your tracked wallets\n` +
-            `/remove_wallet- Stop tracking a wallet\n\n` +
+        // Send the welcome image
+        await bot.sendPhoto(chatId, 'assets/welcome_2.png', {
+            caption: `🚀 <b>Welcome to bs_vybe Bot!</b>\n\n` +
 
-            `<b>💰 TOKEN PRICE ALERTS</b>\n` +
-            `/track_token - Get notified about price movements\n` +
-            `  Example: /track_token SOL or /track_token 6p6xgHy...\n\n` +
+                `<b>🏆 KOL TRACKING</b>\n` +
+                `/kols - View top traders & their performance\n` +
+                `➕ Use /track_kol after viewing a KOL to track their wallet\n` +
+                `🔔 Get updates on Top KOL ranking changes!\n\n` +
 
-            `/set_alert - Get notified when price reaches target\n` +
-            `  Example: /set_alert SOL 100 or /set_alert BONK 0.00001\n\n` +
-
-            `/my_alerts - View your active price alerts\n` +
-            `/remove_alert <code>id</code> - Remove a specific price alert\n\n` +
-
-            `<b>🏆 KOL TRACKING</b>\n` +
-            `/kols - View top KOL traders and their performance\n` +
-            `  ➕ Use /track_kol (after /kols) to track a KOL's wallet\n` +
-            `🔔 Get periodic updates on Top KOL ranking changes!\n` +
-            `  /unsubscribe_kol_updates - Opt-out of KOL updates\n\n` +
-
-            `<b>ℹ️ OTHER COMMANDS</b>\n` +
-            `/testdigest - Test the DEX data functionality\n` +
-            `/help - Show this message again\n\n` +
-
-            `<b>🔔 ABOUT PRICE ALERTS:</b>\n` +
-            `• General alerts trigger when price changes by ${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}% or more\n` +
-            `• Price target alerts trigger when a token crosses your specified price\n` +
-            `• You can set up to ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts`,
-            { parse_mode: 'HTML' }
-        );
+                `<b>💰 PRICE ALERTS</b>\n` +
+                `/track_token - Get alerts for price movements\n` +
+                `/set_alert - Set target price alerts\n` +
+                `/my_alerts - View your active alerts\n` +
+                `/remove_alert id - Remove an alert\n\n`,
+            parse_mode: 'HTML'
+        });
     });
 
     // Add a /help command that shows the same information as /start
@@ -269,10 +251,9 @@ export function setupBot(db: any) {
                 message += `\n<b>👤 Other Wallets:</b>\n`;
                 otherWallets.forEach(wallet => {
                     const startDate = wallet.tracking_started_at ? new Date(wallet.tracking_started_at * 1000).toISOString().split('T')[0] : 'Unknown';
-                    const truncatedAddr = truncateAddress(wallet.wallet_address);
+
                     const explorerUrl = `https://vybe.fyi/wallets/${wallet.wallet_address}?tab=trading`;
-                    message += `${listIndex}. <a href=\"${explorerUrl}\"><code>${truncatedAddr}</code></a>\n`;
-                    message += `   <code>${wallet.wallet_address}</code>\n`;
+                    message += `${listIndex}. <code>${wallet.wallet_address}</code>\n`;
                     message += `   <a href=\"${explorerUrl}\">View on Vybe</a>\n`;
                     message += `   Tracked since: ${startDate}\n`;
                     if (wallet.label) {
@@ -436,7 +417,7 @@ export function setupBot(db: any) {
                 await bot.sendMessage(
                     chatId,
                     `✅ Successfully set up tracking for <b>${token.name} (${token.symbol})</b>!\n\n` +
-                    `💰 Current price: $${token.current_price.toFixed(4)} ${changeText}\n\n` +
+                    `💰 Current price: $${token.current_price.toFixed(7)} ${changeText}\n\n` +
                     `You'll receive alerts when price moves significantly (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%).\n\n` +
                     `To set specific price targets, use:\n` +
                     `/set_alert ${token.symbol} <code>target_price</code>`,
@@ -490,7 +471,7 @@ export function setupBot(db: any) {
                 await bot.sendMessage(
                     chatId,
                     `✅ Found token: <b>${token.name} (${token.symbol})</b>\n\n` +
-                    `💰 Current price: $${token.current_price.toFixed(4)}\n\n` +
+                    `💰 Current price: $${token.current_price.toFixed(7)}\n\n` +
                     `Please enter your target price for the alert.`,
                     { parse_mode: 'HTML' }
                 );
@@ -607,7 +588,7 @@ export function setupBot(db: any) {
                     chatId,
                     `✅ Price alert set for <b>${token.symbol}</b>!\n\n` +
                     `You'll be notified when the price ${priceMovement}.\n` +
-                    `Current price: $${token.current_price.toFixed(4)}\n` +
+                    `Current price: $${token.current_price.toFixed(7)}\n` +
                     `Target price: $${targetPrice.toFixed(4)}` +
                     timeEstimate +
                     `\n\nYou can view your alerts with /my_alerts`,
@@ -990,7 +971,9 @@ export function setupBot(db: any) {
             }
             // Try to add the wallet
             await addTrackedWallet(db, chatId, walletAddress);
-            await bot.sendMessage(chatId, `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\nView all your tracked wallets with /tracked_wallets.`, { parse_mode: 'HTML' });
+            await bot.sendMessage(chatId,
+                `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\n You will receive alerts when they trade a new token.\n View all your tracked wallets with /tracked_wallets.`,
+                { parse_mode: 'HTML' });
             // Optionally clear context after success
             lastViewedKOL.delete(chatId);
         } catch (error: any) {
@@ -1192,7 +1175,7 @@ export interface KOLChangeData {
 }
 
 // Format KOL update message with handle and Vybe URL
-async function formatKOLUpdateMessageWithLinks(changeData: KOLChangeData): Promise<string> {
+async function formatKOLUpdateMessageWithLinks(changeData: KOLChangeData): Promise<{ message: string; image: string }> {
     // Fetch all KOL accounts for lookup
     const kolAccounts = await getKOLAccounts();
     const kolLookup = new Map();
@@ -1221,15 +1204,15 @@ async function formatKOLUpdateMessageWithLinks(changeData: KOLChangeData): Promi
         changesExist = true;
     }
     if (!changesExist) {
-        return '';
+        return { message: '', image: '' };
     }
     message += `\nUse /kols to see the full list.`;
-    return message;
+    return { message, image: 'assets/kol_alert.png' };
 }
 
 // Broadcast KOL updates to subscribed users
 export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
-    const message = await formatKOLUpdateMessageWithLinks(changes);
+    const { message, image } = await formatKOLUpdateMessageWithLinks(changes);
     if (!message) {
         console.log('No significant KOL changes to broadcast.');
         return;
@@ -1248,7 +1231,10 @@ export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
 
         for (const userId of targetUserIds) {
             try {
-                await bot.sendMessage(userId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
+                await bot.sendPhoto(userId, image, {
+                    caption: message,
+                    parse_mode: 'HTML'
+                });
                 successCount++;
                 // Rate limiting delay
                 await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
