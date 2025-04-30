@@ -147,3 +147,4 @@ logs/
 .cursor/rules/env-rule.mdc
 .cursor/rules/bot-rule.mdc
 
+vybe_bot.db
