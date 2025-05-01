@@ -73,9 +73,9 @@ bot.setMyCommands([
     { command: 'track_token', description: 'Track a token for price alerts' },
     { command: 'set_alert', description: 'Set price target alert for a token' },
 ]).then(() => {
-    console.log('Bot commands menu set successfully');
+    // console.log('Bot commands menu set successfully');
 }).catch((error) => {
-    console.error('Error setting bot commands:', error);
+    // console.error('Error setting bot commands:', error);
 });
 
 // Replace startBot function with setupBot that accepts db parameter
@@ -84,16 +84,16 @@ export function setupBot(db: any) {
     if (!isPolling) {
         bot.startPolling().then(() => {
             isPolling = true;
-            console.log('Bot polling started successfully');
+            // console.log('Bot polling started successfully');
         }).catch((error) => {
-            console.error('Error starting bot polling:', error);
+            // console.error('Error starting bot polling:', error);
             // If it's a conflict error, try to stop polling first
             if (error.response?.body?.error_code === 409) {
-                console.log('Bot already polling, attempting to stop and restart...');
+                // console.log('Bot already polling, attempting to stop and restart...');
                 bot.stopPolling().then(() => {
                     bot.startPolling().then(() => {
                         isPolling = true;
-                        console.log('Bot polling restarted successfully');
+                        // console.log('Bot polling restarted successfully');
                     });
                 });
             }
@@ -103,7 +103,7 @@ export function setupBot(db: any) {
     // Handle /start command
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
-        console.log('Received /start command from chatId:', chatId);
+        // console.log('Received /start command from chatId:', chatId);
 
         // Send the welcome image
         await bot.sendPhoto(chatId, 'assets/welcome_2.png', {
@@ -127,7 +127,7 @@ export function setupBot(db: any) {
     bot.onText(/\/help/, async (msg) => {
         // Just call the same code that /start would call
         const chatId = msg.chat.id;
-        console.log('Received /help command from chatId:', chatId);
+        // console.log('Received /help command from chatId:', chatId);
         await bot.sendMessage(chatId,
             `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
 
@@ -167,25 +167,25 @@ export function setupBot(db: any) {
     bot.onText(/\/prices/, async (msg: any) => {
         // Ensure msg.chat exists (it always should for onText)
         const chatId: number = msg.chat.id;
-        console.log(`Received /prices command from chat ID: ${chatId}`);
+        // console.log(`Received /prices command from chat ID: ${chatId}`);
 
         try {
             // Optional: Notify user work is starting
             await bot.sendChatAction(chatId, 'upload_photo');
 
-            console.log('Generating price board image...');
+            // console.log('Generating price board image...');
             const imageBuffer: Buffer = await generatePriceBoardImage();
-            console.log('Image generated, sending photo...');
+            // console.log('Image generated, sending photo...');
 
             // Send the image buffer
             await bot.sendPhoto(chatId, imageBuffer, {
                 caption: 'Latest Solana Token Prices ✨'
                 // You can add parse_mode: 'MarkdownV2' or 'HTML' if needed for the caption
             });
-            console.log('Photo sent successfully.');
+            // console.log('Photo sent successfully.');
 
         } catch (error: unknown) { // Catch unknown type first
-            console.error('Failed to handle /prices command:', error);
+            // console.error('Failed to handle /prices command:', error);
             let errorMessage = '❌ Sorry, I couldn\'t generate the price image right now. Please try again later.';
             if (error instanceof Error) {
                 errorMessage = `❌ Error generating image: ${error.message}`;
@@ -267,7 +267,7 @@ export function setupBot(db: any) {
             message += "• Use /track_kol after viewing a KOL profile to add more.";
             await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: true });
         } catch (error) {
-            console.error('Error in /tracked_wallets command:', error);
+            // console.error('Error in /tracked_wallets command:', error);
             await bot.sendMessage(chatId, `❌ Error fetching your wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     });
@@ -328,7 +328,7 @@ export function setupBot(db: any) {
                     { parse_mode: 'Markdown' }
                 );
             } catch (error) {
-                console.error('Error in wallet tracking:', error);
+                // console.error('Error in wallet tracking:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error tracking wallet: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -360,7 +360,7 @@ export function setupBot(db: any) {
                     { parse_mode: 'Markdown' }
                 );
             } catch (error) {
-                console.error('Error in wallet removal:', error);
+                // console.error('Error in wallet removal:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error removing wallet: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -432,7 +432,7 @@ export function setupBot(db: any) {
                 //     }, 3000);
                 // }
             } catch (error) {
-                console.error('Error in /track_token command:', error);
+                // console.error('Error in /track_token command:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error tracking token: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -479,7 +479,7 @@ export function setupBot(db: any) {
                 // Critical fix: Return here to prevent continuing to the price check in the same function call
                 return;
             } catch (error) {
-                console.error('Error in /set_alert command:', error);
+                // console.error('Error in /set_alert command:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error processing token: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -595,7 +595,7 @@ export function setupBot(db: any) {
                     { parse_mode: 'HTML' }
                 );
             } catch (error) {
-                console.error('Error in /set_alert command:', error);
+                // console.error('Error in /set_alert command:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error setting price alert: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -640,7 +640,7 @@ export function setupBot(db: any) {
                     );
                 }
             } catch (error) {
-                console.error('Error in /remove_alert command:', error);
+                // console.error('Error in /remove_alert command:', error);
                 await bot.sendMessage(
                     chatId,
                     `❌ Error removing alert: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
@@ -739,7 +739,7 @@ export function setupBot(db: any) {
 
             await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
         } catch (error) {
-            console.error('Error in /my_alerts command:', error);
+            // console.error('Error in /my_alerts command:', error);
             await bot.sendMessage(
                 chatId,
                 `❌ Error fetching your alerts: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -775,7 +775,7 @@ export function setupBot(db: any) {
 
             await bot.sendMessage(chatId, "✅ Digest generated successfully!");
         } catch (error) {
-            console.error('Error in /testdigest command:', error);
+            // console.error('Error in /testdigest command:', error);
             await bot.sendMessage(chatId, `❌ Error generating digest: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     });
@@ -783,7 +783,7 @@ export function setupBot(db: any) {
     // Update the /kols command handler
     bot.onText(/\/kols/, async (msg) => {
         const chatId = msg.chat.id;
-        console.log('Received /kols command from chatId:', chatId);
+        // console.log('Received /kols command from chatId:', chatId);
 
         try {
             // Show loading state
@@ -832,7 +832,7 @@ export function setupBot(db: any) {
                 reply_markup: keyboard
             });
         } catch (error) {
-            console.error('Error in /kols command:', error);
+            // console.error('Error in /kols command:', error);
 
             // Enhanced error message based on error type
             let errorMessage = '❌ <b>Error Fetching KOL Data</b>\n\n';
@@ -911,7 +911,7 @@ export function setupBot(db: any) {
                 });
 
             } catch (error) {
-                console.error('Error handling KOLs pagination:', error);
+                // console.error('Error handling KOLs pagination:', error);
                 await bot.answerCallbackQuery(query.id, {
                     text: '❌ Error updating page. Please try /kols again.',
                     show_alert: true
@@ -949,7 +949,7 @@ export function setupBot(db: any) {
                 await bot.sendMessage(chatId, message, { parse_mode: 'HTML', reply_markup: keyboard });
             }
         } catch (error) {
-            console.error('Error in KOL detail view:', error);
+            // console.error('Error in KOL detail view:', error);
             await bot.sendMessage(chatId, '❌ <b>Error Loading KOL Details</b>\n\nUnable to fetch detailed information at the moment.\nPlease try again in a few minutes.', { parse_mode: 'HTML' });
         }
     });
@@ -998,20 +998,20 @@ export function setupBot(db: any) {
             await addKolUnsubscription(db, chatId);
             await bot.sendMessage(chatId, "❌ You will no longer receive Top KOL updates.");
         } catch (error) {
-            console.error('Error unsubscribing user from KOL updates:', error);
+            // console.error('Error unsubscribing user from KOL updates:', error);
             await bot.sendMessage(chatId, "❌ An error occurred while trying to unsubscribe.");
         }
     });
 
     // Error handling
     bot.on('error', (error) => {
-        console.error('Telegram bot error:', error);
+        // console.error('Telegram bot error:', error);
     });
     bot.on('polling_error', (error) => {
-        console.error('Telegram bot polling error:', error);
+        // console.error('Telegram bot polling error:', error);
     });
 
-    console.log(`Bot started... Now listening for commands.`);
+    // console.log(`Bot started... Now listening for commands.`);
 }
 
 // Export the bot instance
@@ -1214,7 +1214,7 @@ async function formatKOLUpdateMessageWithLinks(changeData: KOLChangeData): Promi
 export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
     const { message, image } = await formatKOLUpdateMessageWithLinks(changes);
     if (!message) {
-        console.log('No significant KOL changes to broadcast.');
+        // console.log('No significant KOL changes to broadcast.');
         return;
     }
 
@@ -1225,7 +1225,7 @@ export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
 
         const targetUserIds = allUserIds.filter(userId => !unsubscribedSet.has(userId));
 
-        console.log(`Broadcasting KOL update to ${targetUserIds.length} users...`);
+        // console.log(`Broadcasting KOL update to ${targetUserIds.length} users...`);
         let successCount = 0;
         let errorCount = 0;
 
@@ -1240,21 +1240,21 @@ export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
                 await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
             } catch (error: any) {
                 errorCount++;
-                console.error(`Failed to send KOL update to user ${userId}:`, error.message || error);
+                // console.error(`Failed to send KOL update to user ${userId}:`, error.message || error);
                 // If user blocked the bot (error code 403), unsubscribe them
                 if (error.response?.statusCode === 403 || error.message?.includes('Forbidden')) {
-                    console.log(`User ${userId} blocked the bot. Unsubscribing from KOL updates.`);
+                    // console.log(`User ${userId} blocked the bot. Unsubscribing from KOL updates.`);
                     try {
                         await addKolUnsubscription(db, userId);
                     } catch (unsubError) {
-                        console.error(`Failed to auto-unsubscribe user ${userId}:`, unsubError);
+                        // console.error(`Failed to auto-unsubscribe user ${userId}:`, unsubError);
                     }
                 }
             }
         }
 
-        console.log(`Broadcast completed. ${successCount} users received the update, ${errorCount} errors occurred.`);
+        // console.log(`Broadcast completed. ${successCount} users received the update, ${errorCount} errors occurred.`);
     } catch (error) {
-        console.error('Error broadcasting KOL updates:', error);
+        // console.error('Error broadcasting KOL updates:', error);
     }
 }

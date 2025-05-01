@@ -116,7 +116,7 @@ let priceUpdateCallback: PriceUpdateCallback | null = null;
  */
 export function registerAlertCallback(callback: PriceAlertCallback): void {
     alertCallback = callback;
-    console.log('Alert callback registered');
+    // console.log('Alert callback registered');
 }
 
 /**
@@ -125,7 +125,7 @@ export function registerAlertCallback(callback: PriceAlertCallback): void {
  */
 export function registerPriceUpdateCallback(callback: PriceUpdateCallback): void {
     priceUpdateCallback = callback;
-    console.log('Price update callback registered');
+    // console.log('Price update callback registered');
 }
 
 /**
@@ -134,11 +134,11 @@ export function registerPriceUpdateCallback(callback: PriceUpdateCallback): void
  */
 export async function initializeTokenPrices(db: any): Promise<boolean> {
     try {
-        console.log('Initializing token prices...');
+        // console.log('Initializing token prices...');
         const tokenPrices = await getAllTrackedTokenPrices();
 
         if (tokenPrices.length === 0) {
-            console.error('Failed to fetch any token prices during initialization');
+            // console.error('Failed to fetch any token prices during initialization');
             return false;
         }
 
@@ -148,7 +148,7 @@ export async function initializeTokenPrices(db: any): Promise<boolean> {
         );
 
         const successCount = results.filter(Boolean).length;
-        console.log(`Initialized ${successCount}/${tokenPrices.length} token prices`);
+        // console.log(`Initialized ${successCount}/${tokenPrices.length} token prices`);
 
         // Add initial price history entries to in-memory storage
         const now = Math.floor(Date.now() / 1000);
@@ -158,7 +158,7 @@ export async function initializeTokenPrices(db: any): Promise<boolean> {
 
         return successCount > 0;
     } catch (error) {
-        console.error('Error initializing token prices:', error);
+        // console.error('Error initializing token prices:', error);
         return false;
     }
 }
@@ -187,7 +187,7 @@ async function checkPriceTargets(
             return;
         }
 
-        console.log(`[Service] Checking ${activeAlerts.length} active price targets for ${token.symbol}`);
+        // console.log(`[Service] Checking ${activeAlerts.length} active price targets for ${token.symbol}`);
 
         // Process each alert to see if the target has been hit
         for (const alert of activeAlerts) {
@@ -196,10 +196,10 @@ async function checkPriceTargets(
                 previousPrice < alert.target_price &&
                 token.current_price >= alert.target_price) {
 
-                console.log(
-                    `[Service] 🎯 Target Hit (Above) for ${token.symbol}: ` +
-                    `Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)}, Target: ${alert.target_price.toFixed(4)}, User: ${alert.user_id}`
-                );
+                // console.log(
+                // `[Service] 🎯 Target Hit (Above) for ${token.symbol}: ` +
+                //     `Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)}, Target: ${alert.target_price.toFixed(4)}, User: ${alert.user_id}`
+                // );
 
                 // Notify through callback
                 if (alertCallback) {
@@ -214,10 +214,10 @@ async function checkPriceTargets(
                 previousPrice > alert.target_price &&
                 token.current_price <= alert.target_price) {
 
-                console.log(
-                    `[Service] 🎯 Target Hit (Below) for ${token.symbol}: ` +
-                    `Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)}, Target: ${alert.target_price.toFixed(4)}, User: ${alert.user_id}`
-                );
+                // console.log(
+                // `[Service] 🎯 Target Hit (Below) for ${token.symbol}: ` +
+                //     `Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)}, Target: ${alert.target_price.toFixed(4)}, User: ${alert.user_id}`
+                // );
 
                 // Notify through callback
                 if (alertCallback) {
@@ -229,7 +229,7 @@ async function checkPriceTargets(
             }
         }
     } catch (error) {
-        console.error(`Error checking price targets for ${token.mint_address}:`, error);
+        // console.error(`Error checking price targets for ${token.mint_address}:`, error);
     }
 }
 
@@ -271,17 +271,17 @@ function detectRapidPriceMovement(token: TokenPrice): boolean {
 
         if (isReversal || isAccelerating) {
             const pattern = isReversal ? 'reversal' : 'acceleration';
-            console.log(
-                `⚠️ Rapid price movement (${pattern}) detected for ${token.symbol}: ` +
-                `Recent change: ${recentChange.toFixed(2)}%, ` +
-                `Previous change: ${previousChange.toFixed(2)}%`
-            );
+            // console.log(
+            // `⚠️ Rapid price movement (${pattern}) detected for ${token.symbol}: ` +
+            //     `Recent change: ${recentChange.toFixed(2)}%, ` +
+            //     `Previous change: ${previousChange.toFixed(2)}%`
+            // );
             return true;
         }
 
         return false;
     } catch (error) {
-        console.error(`Error detecting rapid price movement for ${token.mint_address}:`, error);
+        // console.error(`Error detecting rapid price movement for ${token.mint_address}:`, error);
         return false;
     }
 }
@@ -297,7 +297,7 @@ async function processTokenUpdate(
     token: TokenPrice,
     previousPrices: { [key: string]: number } = {}
 ): Promise<void> {
-    console.log(`[Service] Processing update for ${token.symbol} (Mint: ${token.mint_address})`);
+    // console.log(`[Service] Processing update for ${token.symbol} (Mint: ${token.mint_address})`);
 
     const mintAddress = token.mint_address;
 
@@ -305,9 +305,9 @@ async function processTokenUpdate(
     // Ensure the token object has the correct 'now' timestamp from vybeApi
     try {
         await initializeTokenPriceCache(db, token);
-        // console.log(`[Service] Updated token_prices table for ${token.symbol}`); // Optional: debug logging
+        // // console.log(`[Service] Updated token_prices table for ${token.symbol}`); // Optional: debug logging
     } catch (error) {
-        console.error(`[Service] Failed to update token_prices table for ${token.symbol}:`, error);
+        // console.error(`[Service] Failed to update token_prices table for ${token.symbol}:`, error);
         // Decide if we should continue processing or return
         // For now, let's continue, but log the error
     }
@@ -319,18 +319,18 @@ async function processTokenUpdate(
 
     // Skip alert processing if we don't have a valid previous price
     if (previousPrice <= 0) {
-        console.log(`[Service] Skipping alert check for ${token.symbol}: No valid previous price found.`);
+        // console.log(`[Service] Skipping alert check for ${token.symbol}: No valid previous price found.`);
         return;
     }
 
     // Calculate percentage change
     const percentChange = calculatePriceChangePercent(token.current_price, previousPrice);
 
-    console.log(`[Service] Calculated change for ${token.symbol}: ${percentChange.toFixed(2)}% (Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)})`);
+    // console.log(`[Service] Calculated change for ${token.symbol}: ${percentChange.toFixed(2)}% (Prev: ${previousPrice.toFixed(4)}, Curr: ${token.current_price.toFixed(4)})`);
 
     // Call the price update callback if registered (used by workers/UI?)
     if (priceUpdateCallback) {
-        console.log(`[Service] Firing price update callback for ${token.symbol}`);
+        // console.log(`[Service] Firing price update callback for ${token.symbol}`);
         priceUpdateCallback(token, {
             percentChange,
             previousPrice: previousPrice
@@ -350,17 +350,17 @@ async function processTokenUpdate(
     const currentState = generalAlertState[mintAddress] || { direction: 'none', notifiedPrice: 0 };
 
     if (percentChange >= threshold && currentState.direction !== 'up') {
-        console.log(`[Service] General Alert Condition Met (UP) for ${token.symbol}: ${percentChange.toFixed(2)}% >= ${threshold}%`);
+        // console.log(`[Service] General Alert Condition Met (UP) for ${token.symbol}: ${percentChange.toFixed(2)}% >= ${threshold}%`);
         shouldTriggerGeneralAlert = true;
         alertDirection = 'up';
         generalAlertState[mintAddress] = { direction: 'up', notifiedPrice: token.current_price };
     } else if (percentChange <= -threshold && currentState.direction !== 'down') {
-        console.log(`[Service] General Alert Condition Met (DOWN) for ${token.symbol}: ${percentChange.toFixed(2)}% <= -${threshold}%`);
+        // console.log(`[Service] General Alert Condition Met (DOWN) for ${token.symbol}: ${percentChange.toFixed(2)}% <= -${threshold}%`);
         shouldTriggerGeneralAlert = true;
         alertDirection = 'down';
         generalAlertState[mintAddress] = { direction: 'down', notifiedPrice: token.current_price };
     } else if (absChange < threshold && currentState.direction !== 'none') {
-        console.log(`[Service] General Alert Reset for ${token.symbol}: Price returned within +/-${threshold}%`);
+        // console.log(`[Service] General Alert Reset for ${token.symbol}: Price returned within +/-${threshold}%`);
         // Reset state when price comes back within threshold
         generalAlertState[mintAddress] = { direction: 'none', notifiedPrice: 0 };
         shouldTriggerGeneralAlert = false; // Ensure no alert is sent on reset
@@ -368,13 +368,13 @@ async function processTokenUpdate(
     // else: Price is still above/below threshold but we already notified for this direction, OR price is within threshold. Do nothing.
 
     if (shouldTriggerGeneralAlert && alertCallback) {
-        console.log(`[Service] Preparing to fire general alert callback for ${token.symbol} (Direction: ${alertDirection})`);
+        // console.log(`[Service] Preparing to fire general alert callback for ${token.symbol} (Direction: ${alertDirection})`);
 
         // Step 1.3: Get ALL users for general alerts
         const allUserIds = await getAllUserIds(db);
 
         if (allUserIds.length > 0) {
-            console.log(`[Service] !!! General Alert Triggered for ${token.symbol}: Change ${percentChange.toFixed(2)}%. Notifying ${allUserIds.length} potential users.`);
+            // console.log(`[Service] !!! General Alert Triggered for ${token.symbol}: Change ${percentChange.toFixed(2)}%. Notifying ${allUserIds.length} potential users.`);
 
             // Notify through callback
             await alertCallback('general', token, {
@@ -384,10 +384,10 @@ async function processTokenUpdate(
             });
 
         } else {
-            console.log(`[Service] General Alert Triggered for ${token.symbol} but no users found in the database.`);
+            // console.log(`[Service] General Alert Triggered for ${token.symbol} but no users found in the database.`);
         }
     } else if (shouldTriggerGeneralAlert && !alertCallback) {
-        console.warn(`[Service] General Alert Triggered for ${token.symbol} but no alertCallback is registered.`);
+        // console.warn(`[Service] General Alert Triggered for ${token.symbol} but no alertCallback is registered.`);
     }
 }
 
@@ -397,10 +397,10 @@ async function processTokenUpdate(
  */
 export async function pollTokenPrices(db: any): Promise<boolean> {
     const pollStartTime = Date.now();
-    console.log(`[Service] Starting token price poll at ${new Date(pollStartTime).toISOString()}`);
+    // console.log(`[Service] Starting token price poll at ${new Date(pollStartTime).toISOString()}`);
 
     if (isPolling) {
-        console.log('Already polling for token prices, skipping');
+        // console.log('Already polling for token prices, skipping');
         return false;
     }
 
@@ -412,9 +412,9 @@ export async function pollTokenPrices(db: any): Promise<boolean> {
         const currentTokenPrices = await getAllTrackedTokenPrices();
 
         if (!currentTokenPrices || currentTokenPrices.length === 0) {
-            console.warn('[Service] Poll: No token prices returned from API.');
+            // console.warn('[Service] Poll: No token prices returned from API.');
         } else {
-            console.log(`[Service] Poll: Fetched ${currentTokenPrices.length} token prices from API.`);
+            // console.log(`[Service] Poll: Fetched ${currentTokenPrices.length} token prices from API.`);
         }
 
         // Get previous prices from database
@@ -431,10 +431,10 @@ export async function pollTokenPrices(db: any): Promise<boolean> {
             currentTokenPrices.map(token => processTokenUpdate(db, token, previousPrices))
         );
 
-        console.log(`[Service] Poll completed in ${Date.now() - pollStartTime}ms. Processed ${currentTokenPrices.length} tokens.`);
+        // console.log(`[Service] Poll completed in ${Date.now() - pollStartTime}ms. Processed ${currentTokenPrices.length} tokens.`);
         return true;
     } catch (error) {
-        console.error(`[Service] Error polling token prices (Attempt ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+        // console.error(`[Service] Error polling token prices (Attempt ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
         consecutiveFailures++;
         return false;
     } finally {
@@ -447,21 +447,21 @@ export async function pollTokenPrices(db: any): Promise<boolean> {
  * @param db Database connection
  */
 export async function startTokenPriceService(db: any): Promise<boolean> {
-    console.log('[Service] Attempting to start token price polling service...');
+    // console.log('[Service] Attempting to start token price polling service...');
 
     if (isPolling) {
-        console.log('[Service] Token price polling service already running');
+        // console.log('[Service] Token price polling service already running');
         return false;
     }
 
     try {
-        console.log('Starting token price service...');
+        // console.log('Starting token price service...');
 
         // Initialize token prices
         const initialized = await initializeTokenPrices(db);
 
         if (!initialized) {
-            console.error('Failed to initialize token prices, but continuing with service start');
+            // console.error('Failed to initialize token prices, but continuing with service start');
         }
 
         // Stop any existing polling
@@ -474,7 +474,7 @@ export async function startTokenPriceService(db: any): Promise<boolean> {
             try {
                 // If too many consecutive failures, increase polling interval temporarily
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    console.warn(`${consecutiveFailures} consecutive failures, backing off...`);
+                    // console.warn(`${consecutiveFailures} consecutive failures, backing off...`);
                     // Clear current interval and set a longer one
                     if (pollingInterval) {
                         clearInterval(pollingInterval);
@@ -484,7 +484,7 @@ export async function startTokenPriceService(db: any): Promise<boolean> {
                         PRICE_ALERT_CONFIG.pollingIntervalMs * Math.pow(2, consecutiveFailures - MAX_CONSECUTIVE_FAILURES),
                         10 * 60 * 1000
                     );
-                    console.log(`Setting temporary polling interval to ${backoffMs}ms`);
+                    // console.log(`Setting temporary polling interval to ${backoffMs}ms`);
 
                     // Set a one-time timeout that will reset the normal polling when it succeeds
                     setTimeout(async () => {
@@ -495,7 +495,7 @@ export async function startTokenPriceService(db: any): Promise<boolean> {
                                 clearInterval(pollingInterval);
                             }
                             pollingInterval = setInterval(() => pollTokenPrices(db), PRICE_ALERT_CONFIG.pollingIntervalMs);
-                            console.log('Resumed normal polling interval');
+                            // console.log('Resumed normal polling interval');
                         }
                     }, backoffMs);
                     return;
@@ -503,18 +503,18 @@ export async function startTokenPriceService(db: any): Promise<boolean> {
 
                 await pollTokenPrices(db);
             } catch (error) {
-                console.error('Error in polling interval:', error);
+                // console.error('Error in polling interval:', error);
             }
         }, PRICE_ALERT_CONFIG.pollingIntervalMs);
 
-        console.log(`[Service] Token price polling service started. Interval: ${PRICE_ALERT_CONFIG.pollingIntervalMs / 1000} seconds`);
+        // console.log(`[Service] Token price polling service started. Interval: ${PRICE_ALERT_CONFIG.pollingIntervalMs / 1000} seconds`);
 
         // Do an initial poll immediately
         await pollTokenPrices(db);
 
         return true;
     } catch (error) {
-        console.error('Error starting token price service:', error);
+        // console.error('Error starting token price service:', error);
         return false;
     }
 }
@@ -523,15 +523,15 @@ export async function startTokenPriceService(db: any): Promise<boolean> {
  * Stop the token price polling service
  */
 export function stopTokenPriceService(): void {
-    console.log('[Service] Attempting to stop token price polling service...');
+    // console.log('[Service] Attempting to stop token price polling service...');
 
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
         isPolling = false;
-        console.log('[Service] Token price polling service stopped.');
+        // console.log('[Service] Token price polling service stopped.');
     } else {
-        console.log('[Service] Token price polling service was not running.');
+        // console.log('[Service] Token price polling service was not running.');
     }
 }
 
@@ -576,7 +576,7 @@ export async function getTokenPriceChange(
 
         return calculatePriceChangePercent(current.current_price, previousPrice);
     } catch (error) {
-        console.error(`Error calculating price change for ${mintAddress}:`, error);
+        // console.error(`Error calculating price change for ${mintAddress}:`, error);
         return null;
     }
 }
@@ -625,7 +625,7 @@ export async function simulatePriceChange(
         const tokens = await getAllTokenPrices(db);
         const token = tokens.find(t => t.mint_address === mintAddress);
         if (!token) {
-            console.error(`Token with mint address ${mintAddress} not found`);
+            // console.error(`Token with mint address ${mintAddress} not found`);
             return false;
         }
 
@@ -633,7 +633,7 @@ export async function simulatePriceChange(
         const oldPrice = token.current_price;
         const newPrice = oldPrice * (1 + percentChange / 100);
 
-        console.log(`[${new Date().toISOString()}] Simulating ${percentChange}% price change for ${token.symbol}: ${oldPrice.toFixed(6)} → ${newPrice.toFixed(6)}`);
+        // console.log(`[${new Date().toISOString()}] Simulating ${percentChange}% price change for ${token.symbol}: ${oldPrice.toFixed(6)} → ${newPrice.toFixed(6)}`);
 
         // Create a modified token object with the new price
         const modifiedToken: TokenPrice = {
@@ -655,7 +655,7 @@ export async function simulatePriceChange(
 
         return true;
     } catch (error) {
-        console.error('Error simulating price change:', error);
+        // console.error('Error simulating price change:', error);
         return false;
     }
 }

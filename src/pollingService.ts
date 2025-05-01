@@ -191,7 +191,7 @@ async function checkSingleWalletActivity(db: any, walletAddress: string, users: 
             }
         }
     } catch (error) {
-        console.error(`Error checking wallet ${walletAddress}:`, error);
+        // console.error(`Error checking wallet ${walletAddress}:`, error);
         walletLog(walletAddress, null, 'Error checking wallet activity', { error: String(error) });
     }
 }
@@ -201,7 +201,7 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
     try {
         // Get all tracked wallets
         const trackedWallets = await getAllTrackedWalletsWithState(db);
-        console.log(`Checking ${trackedWallets.length} tracked wallets...`);
+        // console.log(`Checking ${trackedWallets.length} tracked wallets...`);
 
         // Group wallets by address for efficiency
         const walletsByAddress = new Map<string, Array<{
@@ -231,7 +231,7 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
             if (users) {
                 await checkSingleWalletActivity(db, specificWalletAddress, users);
             } else {
-                console.log(`No users are tracking wallet ${specificWalletAddress}`);
+                // console.log(`No users are tracking wallet ${specificWalletAddress}`);
             }
             return;
         }
@@ -243,7 +243,7 @@ export async function checkWalletActivity(db: any, specificWalletAddress?: strin
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     } catch (error) {
-        console.error('Error in checkWalletActivity:', error);
+        // console.error('Error in checkWalletActivity:', error);
     }
 }
 
@@ -252,9 +252,9 @@ export async function startPollingService(db: any) {
     // Log all tracked wallets at startup
     try {
         const trackedWallets = await getAllTrackedWalletsWithState(db);
-        console.log('\nCurrently tracked wallets:');
+        // console.log('\nCurrently tracked wallets:');
         if (trackedWallets.length === 0) {
-            console.log('No wallets are currently being tracked.');
+            // console.log('No wallets are currently being tracked.');
         } else {
             // Group wallets by user for better readability
             const walletsByUser = new Map<number, Array<{ address: string, createdAt: string }>>();
@@ -270,53 +270,27 @@ export async function startPollingService(db: any) {
 
             // Log each user's tracked wallets
             for (const [userId, wallets] of walletsByUser) {
-                console.log(`\nUser ${userId} is tracking:`);
+                // console.log(`\nUser ${userId} is tracking:`);
                 wallets.forEach(wallet => {
-                    console.log(`- ${wallet.address} (tracked since: ${wallet.createdAt})`);
+                    // console.log(`- ${wallet.address} (tracked since: ${wallet.createdAt})`);
                     walletLog(wallet.address, userId, 'Tracking resumed on bot startup', {
                         tracked_since: wallet.createdAt
                     });
                 });
             }
         }
-        console.log('\n');
+        // console.log('\n');
     } catch (error) {
-        console.error('Error logging tracked wallets:', error);
+        // console.error('Error logging tracked wallets:', error);
     }
 
     // Run every 15 seconds
     setInterval(() => {
         checkWalletActivity(db).catch(error => {
-            console.error('Error in polling service:', error);
+            // console.error('Error in polling service:', error);
         });
     }, 15000); // 15000 milliseconds = 15 seconds
 
-    console.log('Wallet activity polling service started');
+    // console.log('Wallet activity polling service started');
 }
 
-// Debug/Test section: Run a test of lightweight polling and spam filtering if this file is executed directly
-// if (require.main === module) {
-//     (async () => {
-//         const testWallet = process.argv[2] || '7iNJ7CLNT8UBPANxkkrsURjzaktbomCVa93N1sKcVo9C';
-//         console.log(`\n[DEBUG] Testing lightweight polling and spam filtering for wallet: ${testWallet}`);
-
-//         // --- Debug Helius RPC signature fetch ---
-//         const signatures = await getRecentSignaturesForWallet(testWallet, 10);
-//         console.log(`[DEBUG] Latest signatures from Helius RPC for ${testWallet}:`);
-//         console.log(signatures);
-
-//         // Simulate a user object for testing
-//         const users = [
-//             {
-//                 userId: 123456,
-//                 lastSig: null, // Set to a known signature to test skipping
-//                 lastBlockTime: null,
-//                 trackingStartedAt: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
-//                 createdAt: new Date(Date.now() - 86400 * 1000).toISOString()
-//             }
-//         ];
-//         // Use an in-memory DB or mock as needed; here we pass null for demonstration
-//         await checkSingleWalletActivity(null, testWallet, users);
-//         console.log('[DEBUG] Test complete.');
-//     })();
-// } 

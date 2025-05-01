@@ -14,17 +14,17 @@ let isCheckingKols = false; // Prevent concurrent runs
  */
 async function checkKOLRankingChanges(db: any) {
     if (isCheckingKols) {
-        console.log('[KOL Ranking] Check already in progress, skipping this interval.');
+        // console.log('[KOL Ranking] Check already in progress, skipping this interval.');
         return;
     }
     isCheckingKols = true;
-    console.log('[KOL Ranking] Starting check...');
+    // console.log('[KOL Ranking] Starting check...');
 
     try {
         // 1. Fetch Current Ranking
         const currentActiveKols = await getActiveKOLAccounts();
         if (!currentActiveKols || currentActiveKols.length === 0) {
-            console.warn('[KOL Ranking] No active KOLs found currently.');
+            // console.warn('[KOL Ranking] No active KOLs found currently.');
             isCheckingKols = false;
             return;
         }
@@ -39,7 +39,7 @@ async function checkKOLRankingChanges(db: any) {
 
         // 3. Handle Initial Run or No Previous Data
         if (previousTopKols.length === 0) {
-            console.log('[KOL Ranking] No previous ranking found. Storing current ranking.');
+            // console.log('[KOL Ranking] No previous ranking found. Storing current ranking.');
             await updatePreviousTopKols(db, currentTopKols);
             isCheckingKols = false;
             return;
@@ -53,7 +53,7 @@ async function checkKOLRankingChanges(db: any) {
         const currentTop1 = currentTopKols.length > 0 ? currentTopKols[0] : null;
         const previousTop1 = previousTopKols.length > 0 ? previousTopKols[0] : null;
         if (currentTop1 && previousTop1 && currentTop1.ownerAddress !== previousTop1.owner_address) {
-            console.log(`[KOL Ranking] New #1 detected: ${currentTop1.name} (${currentTop1.ownerAddress})`);
+            // console.log(`[KOL Ranking] New #1 detected: ${currentTop1.name} (${currentTop1.ownerAddress})`);
             changeData.newNumberOne = { name: currentTop1.name, address: currentTop1.ownerAddress };
             significantChangeDetected = true;
         }
@@ -66,7 +66,7 @@ async function checkKOLRankingChanges(db: any) {
             .filter(k => !previousTopNSet.has(k.ownerAddress));
 
         if (newEntrants.length > 0) {
-            console.log(`[KOL Ranking] New entrants in Top ${TOP_N_FOR_NEW_ENTRANTS}:`, newEntrants.map(k => k.name));
+            // console.log(`[KOL Ranking] New entrants in Top ${TOP_N_FOR_NEW_ENTRANTS}:`, newEntrants.map(k => k.name));
             changeData.newEntrantsTop5 = newEntrants.map(k => ({ name: k.name, address: k.ownerAddress }));
             significantChangeDetected = true;
         }
@@ -76,18 +76,18 @@ async function checkKOLRankingChanges(db: any) {
 
         // 8. Trigger Broadcast if changes were detected
         if (significantChangeDetected) {
-            console.log('[KOL Ranking] Significant changes detected. Triggering broadcast...');
+            // console.log('[KOL Ranking] Significant changes detected. Triggering broadcast...');
             // Call the broadcast function (ensure it's exported from telegram.ts)
             await broadcastKOLUpdates(db, changeData);
         } else {
-            console.log('[KOL Ranking] No significant changes detected.');
+            // console.log('[KOL Ranking] No significant changes detected.');
         }
 
     } catch (error) {
-        console.error('[KOL Ranking] Error during check:', error);
+        // console.error('[KOL Ranking] Error during check:', error);
     } finally {
         isCheckingKols = false;
-        console.log('[KOL Ranking] Check finished.');
+        // console.log('[KOL Ranking] Check finished.');
     }
 }
 
@@ -95,14 +95,14 @@ async function checkKOLRankingChanges(db: any) {
  * Starts the periodic check for KOL ranking changes.
  */
 export function startKolRankingService(db: any) {
-    console.log(`[KOL Ranking] Service starting. Checking every ${KOL_CHECK_INTERVAL_MS / 1000 / 60} minutes.`);
+    // console.log(`[KOL Ranking] Service starting. Checking every ${KOL_CHECK_INTERVAL_MS / 1000 / 60} minutes.`);
 
     // Initial check shortly after start, then regular interval
     setTimeout(() => checkKOLRankingChanges(db).catch(console.error), 5000); // Check 5 seconds after start
 
     setInterval(() => {
         checkKOLRankingChanges(db).catch(error => {
-            console.error('[KOL Ranking] Error in scheduled check:', error);
+            // console.error('[KOL Ranking] Error in scheduled check:', error);
         });
     }, KOL_CHECK_INTERVAL_MS);
 } 
