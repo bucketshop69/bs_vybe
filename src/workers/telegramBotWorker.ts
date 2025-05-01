@@ -75,7 +75,7 @@ port.on('message', async (message) => {
     try {
         switch (message.type) {
             case 'SETUP_BOT':
-                console.log('Setting up telegram bot...');
+                // console.log('Setting up telegram bot...');
                 setupBot(dbProxy);
 
                 // Remove explicit polling start since it's handled in setupBot
@@ -83,7 +83,7 @@ port.on('message', async (message) => {
                 break;
 
             case 'SHUTDOWN':
-                console.log('Shutting down telegram bot worker...');
+                // console.log('Shutting down telegram bot worker...');
 
                 // Stop polling before shutdown to prevent conflicts
                 bot.stopPolling().then(() => {
@@ -93,11 +93,11 @@ port.on('message', async (message) => {
                 break;
 
             case 'SEND_PRICE_ALERT_NOTIFICATION':
-                console.log('[TelegramWorker] Received SEND_PRICE_ALERT_NOTIFICATION:', message.payload);
+                // console.log('[TelegramWorker] Received SEND_PRICE_ALERT_NOTIFICATION:', message.payload);
                 const { payload } = message;
 
                 if (!payload || !Array.isArray(payload.userIds) || payload.userIds.length === 0) {
-                    console.warn('[TelegramWorker] Invalid or missing user IDs in alert payload. Skipping.');
+                    // console.warn('[TelegramWorker] Invalid or missing user IDs in alert payload. Skipping.');
                     return;
                 }
 
@@ -117,17 +117,17 @@ port.on('message', async (message) => {
                     formattedMessage += `Current Price: *$${currentPrice}*`;
                 } else {
                     formattedMessage += `Token *${tokenSymbol}* updated.\nCurrent Price: *$${currentPrice}*`;
-                    console.warn(`[TelegramWorker] Unknown alertType: ${payload.alertType}`);
+                    // console.warn(`[TelegramWorker] Unknown alertType: ${payload.alertType}`);
                 }
 
                 // Send the message to each relevant user
                 for (const userId of payload.userIds) {
                     try {
-                        console.log(`[TelegramWorker] Sending alert to user ${userId}`);
+                        // console.log(`[TelegramWorker] Sending alert to user ${userId}`);
                         await bot.sendMessage(userId, formattedMessage, { parse_mode: 'Markdown' });
                     } catch (error: any) {
                         // Handle potential errors like user blocking the bot
-                        console.error(`[TelegramWorker] Failed to send alert to user ${userId}:`, error.message || error);
+                        // console.error(`[TelegramWorker] Failed to send alert to user ${userId}:`, error.message || error);
                         // Consider adding logic here to mark the user as inactive or handle specific error codes
                     }
                 }
@@ -136,11 +136,11 @@ port.on('message', async (message) => {
             default:
                 // Skip DB_RESPONSE messages as they're handled separately
                 if (message.type !== 'DB_RESPONSE') {
-                    console.warn(`Worker: Unknown message type: ${message.type}`);
+                    // console.warn(`Worker: Unknown message type: ${message.type}`);
                 }
         }
     } catch (error: any) {
-        console.error('Worker: Error processing message:', error);
+        // console.error('Worker: Error processing message:', error);
         port.postMessage({
             type: 'ERROR',
             error: error.message,
@@ -152,7 +152,7 @@ port.on('message', async (message) => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-    console.error('Worker: Uncaught exception:', error);
+    // console.error('Worker: Uncaught exception:', error);
     port.postMessage({
         type: 'UNCAUGHT_EXCEPTION',
         error: error.message,
@@ -168,4 +168,4 @@ port.postMessage({
     timestamp: Date.now()
 });
 
-console.log('Telegram bot worker started and ready to receive messages'); 
+// console.log('Telegram bot worker started and ready to receive messages'); 

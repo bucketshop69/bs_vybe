@@ -39,7 +39,7 @@ export function initializeTokenAlerts(): void {
     // Start the notification queue processor
     startQueueProcessor();
 
-    console.log('Token alert system initialized');
+    // console.log('Token alert system initialized');
 }
 
 /**
@@ -51,7 +51,7 @@ function startQueueProcessor(): void {
     }
 
     queueProcessorTimer = setInterval(processNotificationQueue, QUEUE_PROCESS_INTERVAL_MS);
-    console.log('Notification queue processor started');
+    // console.log('Notification queue processor started');
 }
 
 /**
@@ -61,7 +61,7 @@ export function stopNotificationSystem(): void {
     if (queueProcessorTimer) {
         clearInterval(queueProcessorTimer);
         queueProcessorTimer = null;
-        console.log('Notification queue processor stopped');
+        // console.log('Notification queue processor stopped');
     }
 }
 
@@ -92,7 +92,7 @@ async function processNotificationQueue(): Promise<void> {
                 // Add delay between messages
                 await new Promise(resolve => setTimeout(resolve, NOTIFICATION_DELAY_MS));
             } catch (error) {
-                console.error(`Error sending notification to user ${notification.userId}:`, error);
+                // console.error(`Error sending notification to user ${notification.userId}:`, error);
 
                 // Retry failed notifications
                 if (notification.retryCount < MAX_RETRY_COUNT) {
@@ -102,7 +102,7 @@ async function processNotificationQueue(): Promise<void> {
                         notificationQueue.push(notification);
                     }, 1000 * Math.pow(2, notification.retryCount));
                 } else {
-                    console.error(`Failed to send notification to user ${notification.userId} after ${MAX_RETRY_COUNT} attempts`);
+                    // console.error(`Failed to send notification to user ${notification.userId} after ${MAX_RETRY_COUNT} attempts`);
                 }
             }
         }
@@ -272,7 +272,7 @@ function queueNotification(
         });
         return true;
     } catch (error) {
-        console.error(`Error queueing notification for user ${userId}:`, error);
+        // console.error(`Error queueing notification for user ${userId}:`, error);
         return false;
     }
 }
@@ -291,7 +291,7 @@ function queueGroupNotification(
     const groupChatId = process.env.TELEGRAM_GROUP_ID;
     if (!groupChatId) {
         // Just log at debug level since this is optional functionality
-        console.debug('Group notifications not configured: TELEGRAM_GROUP_ID not set in environment');
+        // console.debug('Group notifications not configured: TELEGRAM_GROUP_ID not set in environment');
         return false;
     }
 
@@ -315,14 +315,14 @@ function queueGroupNotification(
                 // Remove from queue since we sent it directly
                 notificationQueue.pop();
             }).catch((error) => {
-                console.error(`Error sending to topic ${topicId}:`, error);
+                // console.error(`Error sending to topic ${topicId}:`, error);
                 // Keep in queue for normal processing
             });
         }
 
         return true;
     } catch (error) {
-        console.error(`Error queueing group notification:`, error);
+        // console.error(`Error queueing group notification:`, error);
         return false;
     }
 }
@@ -346,7 +346,7 @@ export async function sendPriceDigest(
 
     if (!groupChatId) {
         // Just log at debug level since this is optional functionality
-        console.debug('Price digest not sent: TELEGRAM_GROUP_ID not set in environment');
+        // console.debug('Price digest not sent: TELEGRAM_GROUP_ID not set in environment');
         return false;
     }
 
@@ -371,10 +371,10 @@ export async function sendPriceDigest(
             message_thread_id: digestTopicId
         });
 
-        console.log(`Sent price digest to group ${groupChatId}${digestTopicId ? `, topic ${digestTopicId}` : ''}`);
+        // console.log(`Sent price digest to group ${groupChatId}${digestTopicId ? `, topic ${digestTopicId}` : ''}`);
         return true;
     } catch (error) {
-        console.error('Error sending price digest:', error);
+        // console.error('Error sending price digest:', error);
         return false;
     }
 }
@@ -409,7 +409,7 @@ const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
                 if (queued) {
                     queuedCount++;
                     // Log the successful queuing to the user's file
-                    console.log(`[DEBUG] Reached userLog call for User ID: ${userId}`);
+                    // console.log(`[DEBUG] Reached userLog call for User ID: ${userId}`);
                     userLog(userId, `[Price Alert Sent] Token: ${token.symbol}`, {
                         currentPrice: token.current_price.toFixed(6),
                         previousPrice: data.previousPrice.toFixed(6),
@@ -418,7 +418,7 @@ const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
                 }
             }
 
-            console.log(`Queued general price alerts for ${token.symbol} to ${queuedCount}/${data.userIds.length} users`);
+            // console.log(`Queued general price alerts for ${token.symbol} to ${queuedCount}/${data.userIds.length} users`);
 
             // For significant price movements, also post to the group chat if configured
             if (Math.abs(data.percentChange) >= 10 && process.env.TELEGRAM_GROUP_ID) {
@@ -433,13 +433,13 @@ const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
             // No throttling for target alerts as they're one-time events
             const queued = queueNotification(data.userAlert.user_id, message);
 
-            console.log(
-                `Queued price target alert for ${token.symbol} to user ${data.userAlert.user_id}: ` +
-                `${queued ? 'Success' : 'Failed'}`
-            );
+            // console.log(
+            // `Queued price target alert for ${token.symbol} to user ${data.userAlert.user_id}: ` +
+            //     `${queued ? 'Success' : 'Failed'}`
+            // );
         }
     } catch (error) {
-        console.error('Error handling price alert:', error);
+        // console.error('Error handling price alert:', error);
     }
 };
 
@@ -489,7 +489,7 @@ export async function sendTestPriceAlerts(userId: number, token: TokenPrice): Pr
 
         return true;
     } catch (error) {
-        console.error('Error sending test price alerts:', error);
+        // console.error('Error sending test price alerts:', error);
         return false;
     }
 }

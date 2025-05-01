@@ -38,7 +38,7 @@ export async function initializeDatabase() {
         dbPath = './vybe_bot.db'; // Default to local directory
     }
 
-    console.log(`Attempting to initialize database at: ${dbPath}`);
+    // console.log(`Attempting to initialize database at: ${dbPath}`);
 
     // Check if the directory is accessible/writable before proceeding
     try {
@@ -47,14 +47,14 @@ export async function initializeDatabase() {
         // Skip directory creation for current dir
         if (dbDir !== '.' && !fs.existsSync(dbDir)) {
             try {
-                console.log(`Creating database directory: ${dbDir}`);
+                // console.log(`Creating database directory: ${dbDir}`);
                 fs.mkdirSync(dbDir, { recursive: true });
-                console.log(`Successfully created directory: ${dbDir}`);
+                // console.log(`Successfully created directory: ${dbDir}`);
             } catch (dirError: any) {
-                console.error(`Error creating directory ${dbDir}: ${dirError.message}`);
+                // console.error(`Error creating directory ${dbDir}: ${dirError.message}`);
 
                 // If we can't create the specified directory, fall back to using the current directory
-                console.log(`Falling back to current directory for database`);
+                // console.log(`Falling back to current directory for database`);
                 dbPath = './vybe_bot.db';
             }
         }
@@ -62,11 +62,11 @@ export async function initializeDatabase() {
         // Final check if directory exists and is writable
         const finalDir = path.dirname(dbPath);
         if (finalDir !== '.' && !fs.existsSync(finalDir)) {
-            console.error(`Directory ${finalDir} still doesn't exist, using current directory`);
+            // console.error(`Directory ${finalDir} still doesn't exist, using current directory`);
             dbPath = './vybe_bot.db';
         }
 
-        console.log(`Final database path: ${dbPath}`);
+        // console.log(`Final database path: ${dbPath}`);
 
         // Open the database
         const db = await open({
@@ -103,14 +103,14 @@ export async function initializeDatabase() {
         // Add columns if they don't exist (for upgrading existing databases)
         try {
             await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN last_processed_block_time INTEGER;`);
-            console.log('Added last_processed_block_time column to tracked_wallets table');
+            // console.log('Added last_processed_block_time column to tracked_wallets table');
         } catch (e) {
             // Column likely already exists
         }
 
         try {
             await db.exec(`ALTER TABLE tracked_wallets ADD COLUMN tracking_started_at INTEGER;`);
-            console.log('Added tracking_started_at column to tracked_wallets table');
+            // console.log('Added tracking_started_at column to tracked_wallets table');
         } catch (e) {
             // Column likely already exists
         }
@@ -185,10 +185,10 @@ export async function initializeDatabase() {
             );
         `);
 
-        console.log('Database tables checked/created successfully.');
+        // console.log('Database tables checked/created successfully.');
         return db;
     } catch (error) {
-        console.error(`Error initializing database: ${error}`);
+        // console.error(`Error initializing database: ${error}`);
         throw error;
     }
 }
@@ -313,7 +313,7 @@ export async function getAllUserIds(db: any): Promise<number[]> {
         const rows: { user_id: number }[] = await db.all('SELECT DISTINCT user_id FROM users');
         return rows.map((row: { user_id: number }) => row.user_id);
     } catch (error) {
-        console.error('Error getting all user IDs:', error);
+        // console.error('Error getting all user IDs:', error);
         return [];
     }
 }
@@ -345,7 +345,7 @@ export async function initializeTokenPriceCache(db: any, tokenDetails: TokenPric
         );
         return true;
     } catch (error) {
-        console.error(`Error initializing token price cache for ${tokenDetails.mint_address}:`, error);
+        // console.error(`Error initializing token price cache for ${tokenDetails.mint_address}:`, error);
         return false;
     }
 }
@@ -359,7 +359,7 @@ export async function getTokenPrice(db: any, mintAddress: string): Promise<Token
         );
         return tokenPrice;
     } catch (error) {
-        console.error(`Error getting token price for ${mintAddress}:`, error);
+        // console.error(`Error getting token price for ${mintAddress}:`, error);
         return null;
     }
 }
@@ -369,7 +369,7 @@ export async function getAllTokenPrices(db: any): Promise<TokenPrice[]> {
     try {
         return await db.all('SELECT * FROM token_prices');
     } catch (error) {
-        console.error('Error getting all token prices:', error);
+        // console.error('Error getting all token prices:', error);
         return [];
     }
 }
@@ -382,7 +382,7 @@ export async function addPriceHistoryEntry(
     timestamp: number
 ): Promise<boolean> {
     // This function is now deprecated - we're using in-memory storage instead
-    console.warn('addPriceHistoryEntry is deprecated - using in-memory storage instead');
+    // console.warn('addPriceHistoryEntry is deprecated - using in-memory storage instead');
     return true;
 }
 
@@ -408,7 +408,7 @@ export async function subscribeToTokenAlerts(
         );
         return true;
     } catch (error) {
-        console.error(`Error subscribing user ${userId} to alerts for ${mintAddress}:`, error);
+        // console.error(`Error subscribing user ${userId} to alerts for ${mintAddress}:`, error);
         return false;
     }
 }
@@ -428,7 +428,7 @@ export async function unsubscribeFromTokenAlerts(
 
         return result.changes > 0;
     } catch (error) {
-        console.error(`Error unsubscribing user ${userId} from alerts for ${mintAddress}:`, error);
+        // console.error(`Error unsubscribing user ${userId} from alerts for ${mintAddress}:`, error);
         return false;
     }
 }
@@ -449,7 +449,7 @@ export async function getUserTokenSubscriptions(db: any, userId: number): Promis
             [userId]
         );
     } catch (error) {
-        console.error(`Error getting token subscriptions for user ${userId}:`, error);
+        // console.error(`Error getting token subscriptions for user ${userId}:`, error);
         return [];
     }
 }
@@ -463,7 +463,7 @@ export async function getTokenSubscriptionCount(db: any, userId: number): Promis
         );
         return result.count;
     } catch (error) {
-        console.error(`Error getting token subscription count for user ${userId}:`, error);
+        // console.error(`Error getting token subscription count for user ${userId}:`, error);
         return 0;
     }
 }
@@ -477,7 +477,7 @@ export async function getTokenSubscribers(db: any, mintAddress: string): Promise
         );
         return subscribers.map((row: { user_id: number }) => row.user_id);
     } catch (error) {
-        console.error(`Error getting subscribers for token ${mintAddress}:`, error);
+        // console.error(`Error getting subscribers for token ${mintAddress}:`, error);
         return [];
     }
 }
@@ -517,7 +517,7 @@ export async function createPriceAlert(
 
         return result.lastID;
     } catch (error) {
-        console.error(`Error creating price alert for user ${userId} on token ${mintAddress}:`, error);
+        // console.error(`Error creating price alert for user ${userId} on token ${mintAddress}:`, error);
         if (error instanceof Error) {
             throw error; // Re-throw user-facing errors
         }
@@ -541,7 +541,7 @@ export async function getUserPriceAlerts(db: any, userId: number): Promise<UserP
             [userId]
         );
     } catch (error) {
-        console.error(`Error getting price alerts for user ${userId}:`, error);
+        // console.error(`Error getting price alerts for user ${userId}:`, error);
         return [];
     }
 }
@@ -561,7 +561,7 @@ export async function getPriceAlertById(db: any, alertId: number): Promise<UserP
             [alertId]
         );
     } catch (error) {
-        console.error(`Error getting price alert ${alertId}:`, error);
+        // console.error(`Error getting price alert ${alertId}:`, error);
         return null;
     }
 }
@@ -581,7 +581,7 @@ export async function removePriceAlert(db: any, userId: number, alertId: number)
 
         return true;
     } catch (error) {
-        console.error(`Error removing price alert ${alertId} for user ${userId}:`, error);
+        // console.error(`Error removing price alert ${alertId} for user ${userId}:`, error);
         if (error instanceof Error) {
             throw error; // Re-throw user-facing errors
         }
@@ -601,7 +601,7 @@ export async function markAlertAsTriggered(db: any, alertId: number): Promise<bo
 
         return result.changes > 0;
     } catch (error) {
-        console.error(`Error marking alert ${alertId} as triggered:`, error);
+        // console.error(`Error marking alert ${alertId} as triggered:`, error);
         return false;
     }
 }
@@ -615,7 +615,7 @@ export async function getActiveAlertsForToken(db: any, mintAddress: string): Pro
             [mintAddress]
         );
     } catch (error) {
-        console.error(`Error getting active alerts for token ${mintAddress}:`, error);
+        // console.error(`Error getting active alerts for token ${mintAddress}:`, error);
         return [];
     }
 }
@@ -632,7 +632,7 @@ export async function addKolUnsubscription(db: any, userId: number): Promise<boo
         );
         return result.changes > 0; // Return true if a new unsubscription was added
     } catch (error) {
-        console.error(`Error adding KOL unsubscription for user ${userId}:`, error);
+        // console.error(`Error adding KOL unsubscription for user ${userId}:`, error);
         throw error; // Re-throw error to be handled by the caller
     }
 }
@@ -643,7 +643,7 @@ export async function getKolUnsubscribedUserIds(db: any): Promise<number[]> {
         const rows = await db.all('SELECT user_id FROM kol_update_unsubscriptions');
         return rows.map((row: { user_id: number }) => row.user_id);
     } catch (error) {
-        console.error('Error fetching KOL unsubscribed user IDs:', error);
+        // console.error('Error fetching KOL unsubscribed user IDs:', error);
         return [];
     }
 }
@@ -662,7 +662,7 @@ export async function getPreviousTopKols(db: any): Promise<PreviousKOL[]> {
         const rows = await db.all('SELECT rank, owner_address, name, last_checked_at FROM previous_top_kols ORDER BY rank ASC');
         return rows;
     } catch (error) {
-        console.error('Error fetching previous top KOLs:', error);
+        // console.error('Error fetching previous top KOLs:', error);
         return [];
     }
 }
@@ -689,14 +689,14 @@ export async function updatePreviousTopKols(db: any, currentTopKols: KnownAccoun
 
         // Commit the transaction
         await db.exec('COMMIT');
-        console.log(`Updated previous_top_kols table with ${currentTopKols.length} entries.`);
+        // console.log(`Updated previous_top_kols table with ${currentTopKols.length} entries.`);
     } catch (error) {
-        console.error('Error updating previous top KOLs:', error);
+        // console.error('Error updating previous top KOLs:', error);
         // Rollback transaction on error
         try {
             await db.exec('ROLLBACK');
         } catch (rollbackError) {
-            console.error('Error rolling back transaction:', rollbackError);
+            // console.error('Error rolling back transaction:', rollbackError);
         }
         // Optionally re-throw the original error
         // throw error;

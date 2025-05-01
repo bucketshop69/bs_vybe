@@ -10,10 +10,10 @@ try {
     const fontPath = path.join(__dirname, '..', 'fonts', 'Montserrat-Bold.ttf');
     if (fs.existsSync(fontPath)) {
         registerFont(fontPath, { family: 'Montserrat', weight: 'bold' });
-        console.log('Montserrat font registered.');
+        // console.log('Montserrat font registered.');
     }
 } catch (fontError) {
-    console.warn("Could not register Montserrat font. Ensure the TTF is available in src/fonts.", fontError);
+    // console.warn("Could not register Montserrat font. Ensure the TTF is available in src/fonts.", fontError);
 }
 
 // Define interface for token data used in image generation
@@ -127,11 +127,11 @@ async function fetchTokenData(config: ImageConfig = DEFAULT_CONFIG): Promise<Tok
         // Try to get data from cache first
         const cachedData = cache.get(cacheKey);
         if (cachedData) {
-            console.log('Using cached token data');
+            // console.log('Using cached token data');
             return cachedData;
         }
 
-        console.log('Fetching token data using TRACKED_TOKENS');
+        // console.log('Fetching token data using TRACKED_TOKENS');
         const tokenMap = await getTokenPrices(TRACKED_TOKENS);
         const tokenPrices = Array.from(tokenMap.values());
 
@@ -208,7 +208,7 @@ export async function generatePriceBoardImage(config: ImageConfig = DEFAULT_CONF
             throw new ImageGenerationError(`Image not found at path: ${imagePath}`, "MISSING_TEMPLATE");
         }
 
-        console.log(`Attempting to load image from: ${imagePath}`);
+        // console.log(`Attempting to load image from: ${imagePath}`);
         const baseImage: CanvasImage = await loadImage(imagePath);
 
         // --- Create Canvas ---
@@ -220,7 +220,7 @@ export async function generatePriceBoardImage(config: ImageConfig = DEFAULT_CONF
         const ctx: CanvasRenderingContext2D = canvas.getContext('2d');
 
         // --- PASTE YOUR FINALIZED DRAWING LOGIC HERE ---
-        console.log('Starting canvas drawing on server...');
+        // console.log('Starting canvas drawing on server...');
         ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
 
         // --- Parameters ---
@@ -297,30 +297,20 @@ export async function generatePriceBoardImage(config: ImageConfig = DEFAULT_CONF
         });
 
         ctx.restore();
-        console.log('Canvas drawing finished.');
+        // console.log('Canvas drawing finished.');
         // --- END OF DRAWING LOGIC ---
 
         // --- Export to Buffer ---
         const buffer: Buffer = canvas.toBuffer('image/png');
-        console.log('Image buffer created.');
+        // console.log('Image buffer created.');
         return buffer;
 
     } catch (error) {
-        console.error("Error generating price board image:", error);
+        // console.error("Error generating price board image:", error);
         if (error instanceof Error) {
             throw new Error(`Image generation failed: ${error.message}`);
         } else {
             throw new Error(`An unknown error occurred during image generation.`);
         }
     }
-}
-
-if (require.main === module) {
-    fetchTokenData({
-        limit: 10,
-        sortBy: 'marketCap',
-        sortOrder: 'desc'
-    }).then(tokens => {
-        console.log(tokens);
-    });
 }

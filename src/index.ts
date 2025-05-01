@@ -53,12 +53,11 @@ async function startApp() {
         // Set up price update and alert listeners
         console.log('Setting up price event listeners...');
         workerManager.setupPriceUpdateListener((data) => {
-            console.log('Price update received:', data);
+            // console.log('Price update received:', data);
             // TODO: Add logic here to potentially forward updates (e.g., to Telegram users requesting live prices)
         });
 
         workerManager.setupPriceAlertListener((alertType, token, data) => {
-            console.log(`[Index] Price alert (${alertType}) received for ${token?.symbol}. Data:`, data);
 
             // --- BEGIN: Construct and send alert notification message --- 
             try {

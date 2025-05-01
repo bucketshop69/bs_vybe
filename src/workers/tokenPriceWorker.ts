@@ -82,7 +82,7 @@ port.on('message', (message) => {
 
 // Forward price updates to main thread
 function forwardPriceUpdate(token: any, changeData: any) {
-    console.log(`[Worker] Forwarding PRICE_UPDATE for ${token?.symbol || 'Unknown Token'}. Data:`, { token, changeData });
+    // console.log(`[Worker] Forwarding PRICE_UPDATE for ${token?.symbol || 'Unknown Token'}. Data:`, { token, changeData });
     port.postMessage({
         type: 'PRICE_UPDATE',
         token,
@@ -93,7 +93,7 @@ function forwardPriceUpdate(token: any, changeData: any) {
 
 // Forward price alerts to main thread
 async function forwardPriceAlert(alertType: string, token: any, data: any): Promise<void> {
-    console.log(`[Worker] Forwarding PRICE_ALERT (${alertType}) for ${token?.symbol || 'Unknown Token'}. Data:`, { alertType, token, data });
+    // console.log(`[Worker] Forwarding PRICE_ALERT (${alertType}) for ${token?.symbol || 'Unknown Token'}. Data:`, { alertType, token, data });
     port.postMessage({
         type: 'PRICE_ALERT',
         alertType,
@@ -111,7 +111,7 @@ const registerCallbacks = () => {
     // Register alert callback
     registerAlertCallback(forwardPriceAlert);
 
-    console.log('Worker: Registered callbacks for price updates and alerts');
+    // console.log('Worker: Registered callbacks for price updates and alerts');
 };
 
 // Handle messages from the main thread
@@ -119,7 +119,7 @@ port.on('message', async (message) => {
     try {
         switch (message.type) {
             case 'INITIALIZE':
-                console.log('Worker: Initializing token price service...');
+                // console.log('Worker: Initializing token price service...');
                 if (!isInitialized) {
                     await initializeTokenPrices(dbProxy);
                     isInitialized = true;
@@ -132,7 +132,7 @@ port.on('message', async (message) => {
                 break;
 
             case 'START_SERVICE':
-                console.log('Worker: Starting token price service...');
+                // console.log('Worker: Starting token price service...');
                 if (!isServiceRunning) {
                     await startTokenPriceService(dbProxy);
                     isServiceRunning = true;
@@ -144,7 +144,7 @@ port.on('message', async (message) => {
                 break;
 
             case 'SHUTDOWN':
-                console.log('Worker: Shutting down token price service...');
+                // console.log('Worker: Shutting down token price service...');
                 if (isServiceRunning) {
                     stopTokenPriceService();
                     isServiceRunning = false;
@@ -158,11 +158,11 @@ port.on('message', async (message) => {
             default:
                 // Skip DB_RESPONSE messages as they're handled separately
                 if (message.type !== 'DB_RESPONSE') {
-                    console.warn(`Worker: Unknown message type: ${message.type}`);
+                    // console.warn(`Worker: Unknown message type: ${message.type}`);
                 }
         }
     } catch (error: any) {
-        console.error('Worker: Error processing message:', error);
+        // console.error('Worker: Error processing message:', error);
         port.postMessage({
             type: 'ERROR',
             error: error.message,
@@ -174,7 +174,7 @@ port.on('message', async (message) => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-    console.error('Worker: Uncaught exception:', error);
+    // console.error('Worker: Uncaught exception:', error);
     port.postMessage({
         type: 'UNCAUGHT_EXCEPTION',
         error: error.message,
@@ -190,4 +190,4 @@ port.postMessage({
     timestamp: Date.now()
 });
 
-console.log('Token price worker started and ready to receive messages'); 
+// console.log('Token price worker started and ready to receive messages'); 

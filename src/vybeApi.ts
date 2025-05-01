@@ -220,14 +220,14 @@ function getRateLimitWaitTime(): number {
 export async function getTokenDetails(mintAddress: string): Promise<TokenDetails | string> {
     const apiKey = process.env.VYBE_KEY;
     if (!apiKey) {
-        console.error('VYBE_KEY is not set in environment variables');
+        // console.error('VYBE_KEY is not set in environment variables');
         return mintAddress;
     }
 
     // Check rate limit
     if (!checkRateLimit()) {
         const waitTime = getRateLimitWaitTime();
-        console.warn(`Rate limit reached, waiting ${waitTime}ms before retrying`);
+        // console.warn(`Rate limit reached, waiting ${waitTime}ms before retrying`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
     }
 
@@ -244,7 +244,7 @@ export async function getTokenDetails(mintAddress: string): Promise<TokenDetails
 
         return response.data;
     } catch (error) {
-        console.error(`Error fetching token details for ${mintAddress}:`, error);
+        // console.error(`Error fetching token details for ${mintAddress}:`, error);
         return mintAddress;
     }
 }
@@ -272,7 +272,7 @@ export async function getTokenPrices(mintAddresses: string[]): Promise<Map<strin
                 tokenMap.set(mintAddress, result);
             }
         } catch (error) {
-            console.error(`Error fetching token ${mintAddress}:`, error);
+            // console.error(`Error fetching token ${mintAddress}:`, error);
         }
     });
 
@@ -299,7 +299,7 @@ export async function getAllTrackedTokenPrices(): Promise<TokenPrice[]> {
             last_update_time: now
         }));
     } catch (error) {
-        console.error('Error fetching tracked token prices:', error);
+        // console.error('Error fetching tracked token prices:', error);
         return [];
     }
 }
@@ -325,7 +325,7 @@ export async function getTokenPrice(mintAddress: string): Promise<TokenPrice | n
             last_update_time: Math.floor(Date.now() / 1000)
         };
     } catch (error) {
-        console.error(`Error fetching price for token ${mintAddress}:`, error);
+        // console.error(`Error fetching price for token ${mintAddress}:`, error);
         return null;
     }
 }
@@ -351,12 +351,12 @@ export async function getProgramDauTimeSeries(programId: string): Promise<DauDat
     const apiKey = process.env.VYBE_KEY;
 
     if (!apiKey) {
-        console.error('VYBE_KEY is not set in environment variables');
+        // console.error('VYBE_KEY is not set in environment variables');
         return null;
     }
 
     try {
-        console.log(`Making request to Vybe API for program ${programId}`);
+        // console.log(`Making request to Vybe API for program ${programId}`);
         const response = await axios.get<VybeApiResponse>(
             `https://api.vybenetwork.xyz/program/${programId}/active-users-ts`,
             {
@@ -371,25 +371,25 @@ export async function getProgramDauTimeSeries(programId: string): Promise<DauDat
 
         // Validate response data
         if (!response.data?.data || !Array.isArray(response.data.data)) {
-            console.error(`Invalid response format for program ${programId}:`, response.data);
+            // console.error(`Invalid response format for program ${programId}:`, response.data);
             return null;
         }
 
         // Ensure we have at least one data point
         if (response.data.data.length === 0) {
-            console.error(`No data points returned for program ${programId}`);
+            // console.error(`No data points returned for program ${programId}`);
             return null;
         }
 
         return response.data.data;
     } catch (error: unknown) {
         if (error instanceof Error) {
-            console.error(`Error fetching data for program ${programId}:`, {
-                message: error.message,
-                stack: error.stack
-            });
+            // console.error(`Error fetching data for program ${programId}:`, {
+            // message: error.message,
+            // stack: error.stack
+            // });
         } else {
-            console.error(`Unexpected error fetching data for program ${programId}:`, error);
+            // console.error(`Unexpected error fetching data for program ${programId}:`, error);
         }
         return null;
     }
@@ -404,7 +404,7 @@ export async function getProgramDauMetrics(programId: string): Promise<DauMetric
     const timeSeriesData = await getProgramDauTimeSeries(programId);
 
     if (!timeSeriesData || timeSeriesData.length < 2) {
-        console.error('Invalid time series data: need at least 2 data points');
+        // console.error('Invalid time series data: need at least 2 data points');
         return null;
     }
 
@@ -436,7 +436,7 @@ export async function getProgramDauMetrics(programId: string): Promise<DauMetric
  * @returns Promise containing an array of ranked DEX data, sorted by current DAU
  */
 export async function getRankedDexData(): Promise<RankedDexData[]> {
-    console.log('Fetching DAU data for all DEX programs...');
+    // console.log('Fetching DAU data for all DEX programs...');
 
     // Use Promise.allSettled to handle potential failures gracefully
     const results = await Promise.allSettled(
@@ -454,7 +454,7 @@ export async function getRankedDexData(): Promise<RankedDexData[]> {
                     percentChange24h: metrics.percentChange24h
                 };
             } catch (error) {
-                console.error(`Error processing ${program.name} (${program.id}):`, error);
+                // console.error(`Error processing ${program.name} (${program.id}):`, error);
                 throw error; // Re-throw to be caught by Promise.allSettled
             }
         })
@@ -469,7 +469,7 @@ export async function getRankedDexData(): Promise<RankedDexData[]> {
     // Sort by currentDau in descending order
     successfulResults.sort((a, b) => b.currentDau - a.currentDau);
 
-    console.log(`Successfully processed ${successfulResults.length} out of ${DEX_PROGRAMS.length} programs`);
+    // console.log(`Successfully processed ${successfulResults.length} out of ${DEX_PROGRAMS.length} programs`);
     return successfulResults;
 }
 
@@ -524,10 +524,9 @@ export async function getRecentTransfersForWallet(
     limit: number = 5
 ): Promise<VybeTransfer[] | null> {
     const apiKey = process.env.VYBE_KEY;
-    console.log(walletAddress);
 
     if (!apiKey) {
-        console.error('VYBE_KEY is not set in environment variables');
+        // console.error('VYBE_KEY is not set in environment variables');
         return null;
     }
 
@@ -546,10 +545,9 @@ export async function getRecentTransfersForWallet(
                 }
             }
         );
-        console.log(response.data);
 
         if (!response.data?.transfers || !Array.isArray(response.data.transfers)) {
-            console.error('Invalid response format for wallet transfers:', response.data);
+            // console.error('Invalid response format for wallet transfers:', response.data);
             return null;
         }
 
@@ -569,7 +567,7 @@ export async function getRecentTransfersForWallet(
         // Await all the promises to resolve
         return transfers;
     } catch (error) {
-        console.error(`Error fetching transfers for wallet ${walletAddress}:`, error);
+        // console.error(`Error fetching transfers for wallet ${walletAddress}:`, error);
         return null;
     }
 }
@@ -597,7 +595,7 @@ export async function getTokenBySymbolOrAddress(symbolOrAddress: string): Promis
 
         return token || null;
     } catch (error) {
-        console.error(`Error getting token by symbol or address (${symbolOrAddress}):`, error);
+        // console.error(`Error getting token by symbol or address (${symbolOrAddress}):`, error);
         return null;
     }
 }
@@ -611,7 +609,7 @@ export async function getTokenBySymbolOrAddress(symbolOrAddress: string): Promis
 export async function getRecentSignaturesForWallet(walletAddress: string, limit: number = 5): Promise<string[]> {
     const apiKey = process.env.HELIUS_RPC_KEY;
     if (!apiKey) {
-        console.error('HELIUS_RPC_KEY is not set in environment variables');
+        // console.error('HELIUS_RPC_KEY is not set in environment variables');
         return [];
     }
 
@@ -629,7 +627,7 @@ export async function getRecentSignaturesForWallet(walletAddress: string, limit:
         }
         return [];
     } catch (error) {
-        console.error(`Error fetching signatures for wallet ${walletAddress} from Helius:`, error);
+        // console.error(`Error fetching signatures for wallet ${walletAddress} from Helius:`, error);
         return [];
     }
 }
@@ -645,7 +643,7 @@ export async function getKnownAccounts(
 ): Promise<KnownAccount[] | null> {
     const apiKey = process.env.VYBE_KEY;
     if (!apiKey) {
-        console.error('VYBE_KEY is not set in environment variables');
+        // console.error('VYBE_KEY is not set in environment variables');
         return null;
     }
 
@@ -668,13 +666,13 @@ export async function getKnownAccounts(
         );
 
         if (!response.data?.accounts || !Array.isArray(response.data.accounts)) {
-            console.error('Invalid response format for known accounts:', response.data);
+            // console.error('Invalid response format for known accounts:', response.data);
             return null;
         }
 
         return response.data.accounts;
     } catch (error) {
-        console.error('Error fetching known accounts:', error);
+        // console.error('Error fetching known accounts:', error);
         return null;
     }
 }
@@ -689,16 +687,6 @@ export async function getKOLAccounts(): Promise<KnownAccount[] | null> {
 }
 
 
-if (require.main === module) {
-    getKOLAccounts()
-        .then(kolaAccounts => {
-            console.log(kolaAccounts);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-}
-
 /**
  * Fetches PnL (Profit and Loss) data for a specific account
  * @param ownerAddress The account address to fetch PnL for (required)
@@ -711,7 +699,7 @@ export async function getAccountPnL(
 ): Promise<AccountPnLResponse | null> {
     const apiKey = process.env.VYBE_KEY;
     if (!apiKey) {
-        console.error('VYBE_KEY is not set in environment variables');
+        // console.error('VYBE_KEY is not set in environment variables');
         return null;
     }
 
@@ -735,13 +723,13 @@ export async function getAccountPnL(
         );
 
         if (!response.data?.summary || !response.data?.tokenMetrics) {
-            console.error('Invalid response format for account PnL:', response.data);
+            // console.error('Invalid response format for account PnL:', response.data);
             return null;
         }
 
         return response.data;
     } catch (error) {
-        console.error(`Error fetching PnL data for account ${ownerAddress}:`, error);
+        // console.error(`Error fetching PnL data for account ${ownerAddress}:`, error);
         return null;
     }
 }
@@ -755,7 +743,7 @@ export async function getActiveKOLAccounts(): Promise<KOLAccountWithPnL[] | null
         // First get all KOL accounts
         const kolAccounts = await getKOLAccounts();
         if (!kolAccounts) {
-            console.error('Failed to fetch KOL accounts');
+            // console.error('Failed to fetch KOL accounts');
             return null;
         }
 
@@ -778,10 +766,10 @@ export async function getActiveKOLAccounts(): Promise<KOLAccountWithPnL[] | null
             account !== null
         );
 
-        console.log(`Found ${activeAccounts.length} active KOL accounts out of ${kolAccounts.length} total`);
+        // console.log(`Found ${activeAccounts.length} active KOL accounts out of ${kolAccounts.length} total`);
         return activeAccounts;
     } catch (error) {
-        console.error('Error fetching active KOL accounts:', error);
+        // console.error('Error fetching active KOL accounts:', error);
         return null;
     }
 }
@@ -791,16 +779,16 @@ if (require.main === module) {
     getActiveKOLAccounts()
         .then(activeKOLs => {
             if (activeKOLs) {
-                console.log(`Active KOLs with trading activity: ${activeKOLs.length}`);
+                // console.log(`Active KOLs with trading activity: ${activeKOLs.length}`);
                 activeKOLs.forEach(kol => {
-                    console.log(`\nKOL: ${kol.name}`);
-                    console.log(`Address: ${kol.ownerAddress}`);
-                    console.log(`Tokens traded: ${kol.pnlData.tokenMetrics.length}`);
-                    console.log(`Total PnL: $${kol.pnlData.summary.realizedPnlUsd.toFixed(2)}`);
+                    // console.log(`\nKOL: ${kol.name}`);
+                    // console.log(`Address: ${kol.ownerAddress}`);
+                    // console.log(`Tokens traded: ${kol.pnlData.tokenMetrics.length}`);
+                    // console.log(`Total PnL: $${kol.pnlData.summary.realizedPnlUsd.toFixed(2)}`);
                 });
             }
         })
         .catch(error => {
-            console.error('Error:', error);
+            // console.error('Error:', error);
         });
 }

@@ -94,8 +94,8 @@ export class WorkerManager extends EventEmitter {
             workerPath = potentialPaths[0];
         }
 
-        console.log(`Starting ${type} worker...`);
-        console.log(`Worker path: ${workerPath}`);
+        // console.log(`Starting ${type} worker...`);
+        // console.log(`Worker path: ${workerPath}`);
 
         return new Promise((resolve, reject) => {
             try {
@@ -117,7 +117,7 @@ export class WorkerManager extends EventEmitter {
 
                 // Handle errors
                 worker.on('error', (error) => {
-                    console.error(`Error in ${type} worker:`, error);
+                    // console.error(`Error in ${type} worker:`, error);
                     this.emit(WorkerManagerEvent.WORKER_ERROR, { type, error });
 
                     if (!this.isShuttingDown) {
@@ -128,7 +128,7 @@ export class WorkerManager extends EventEmitter {
 
                 // Handle worker exit
                 worker.on('exit', (code) => {
-                    console.log(`${type} worker exited with code ${code}`);
+                    // console.log(`${type} worker exited with code ${code}`);
                     this.emit(WorkerManagerEvent.WORKER_EXIT, { type, code });
 
                     if (!this.isShuttingDown && code !== 0) {
@@ -176,7 +176,7 @@ export class WorkerManager extends EventEmitter {
      */
     private handleWorkerMessage(type: WorkerType, message: any): void {
         // --- BEGIN ADDED LOG ---
-        console.log(`[Manager] Received message from ${type} worker:`, message?.type);
+        // console.log(`[Manager] Received message from ${type} worker:`, message?.type);
         // --- END ADDED LOG ---
 
         // Handle DB requests from workers
@@ -187,7 +187,7 @@ export class WorkerManager extends EventEmitter {
 
         // Check if worker is ready
         if (message.type === 'WORKER_READY') {
-            console.log(`${type} worker is ready`);
+            // console.log(`${type} worker is ready`);
             const workerState = this.workers.get(type);
             if (workerState) {
                 workerState.isReady = true;
@@ -203,7 +203,7 @@ export class WorkerManager extends EventEmitter {
 
         // --- BEGIN ADDED LOG for specific events ---
         if (message.type === 'PRICE_UPDATE' || message.type === 'PRICE_ALERT') {
-            console.log(`[Manager] Processing ${message.type} from ${type} worker. Data:`, message);
+            // console.log(`[Manager] Processing ${message.type} from ${type} worker. Data:`, message);
         }
         // --- END ADDED LOG ---
 
@@ -219,7 +219,7 @@ export class WorkerManager extends EventEmitter {
         const workerState = this.workers.get(type);
 
         if (!workerState) {
-            console.error(`Worker ${type} not found for DB request`);
+            // console.error(`Worker ${type} not found for DB request`);
             return;
         }
 
@@ -330,12 +330,12 @@ export class WorkerManager extends EventEmitter {
      */
     public setupPriceUpdateListener(callback: (data: any) => void): void {
         // --- BEGIN ADDED LOG ---
-        console.log('[Manager] Setting up PriceUpdateListener...');
+        // console.log('[Manager] Setting up PriceUpdateListener...');
         // --- END ADDED LOG ---
         this.on(WorkerType.TOKEN_PRICE + '_message', (message) => {
             if (message.type === 'PRICE_UPDATE') {
                 // --- BEGIN ADDED LOG ---
-                console.log('[Manager] Emitting PRICE_UPDATE event to main thread listener.');
+                // console.log('[Manager] Emitting PRICE_UPDATE event to main thread listener.');
                 // --- END ADDED LOG ---
                 callback(message);
             }
@@ -347,12 +347,12 @@ export class WorkerManager extends EventEmitter {
      */
     public setupPriceAlertListener(callback: (alertType: string, token: any, data: any) => void): void {
         // --- BEGIN ADDED LOG ---
-        console.log('[Manager] Setting up PriceAlertListener...');
+        // console.log('[Manager] Setting up PriceAlertListener...');
         // --- END ADDED LOG ---
         this.on(WorkerType.TOKEN_PRICE + '_message', (message) => {
             if (message.type === 'PRICE_ALERT') {
                 // --- BEGIN ADDED LOG ---
-                console.log('[Manager] Emitting PRICE_ALERT event to main thread listener.');
+                // console.log('[Manager] Emitting PRICE_ALERT event to main thread listener.');
                 // --- END ADDED LOG ---
                 callback(message.alertType, message.token, message.data);
             }
@@ -449,7 +449,7 @@ export class WorkerManager extends EventEmitter {
      * Restart a worker
      */
     private async restartWorker(type: WorkerType): Promise<void> {
-        console.log(`Restarting ${type} worker...`);
+        // console.log(`Restarting ${type} worker...`);
 
         // Remove existing worker
         const workerState = this.workers.get(type);
@@ -457,7 +457,7 @@ export class WorkerManager extends EventEmitter {
             try {
                 workerState.worker.terminate();
             } catch (error) {
-                console.error(`Error terminating ${type} worker:`, error);
+                // console.error(`Error terminating ${type} worker:`, error);
             }
 
             this.workers.delete(type);
@@ -473,9 +473,9 @@ export class WorkerManager extends EventEmitter {
             }
             // Add other worker type initializations as needed
 
-            console.log(`${type} worker restarted successfully`);
+            // console.log(`${type} worker restarted successfully`);
         } catch (error) {
-            console.error(`Failed to restart ${type} worker:`, error);
+            // console.error(`Failed to restart ${type} worker:`, error);
         }
     }
 
@@ -483,7 +483,7 @@ export class WorkerManager extends EventEmitter {
      * Shutdown all workers
      */
     public async shutdown(): Promise<void> {
-        console.log('Shutting down all workers...');
+        // console.log('Shutting down all workers...');
         this.isShuttingDown = true;
 
         const shutdownPromises: Promise<void>[] = [];
@@ -505,7 +505,7 @@ export class WorkerManager extends EventEmitter {
                             state.worker.terminate().then(() => resolve());
                         }
                     } catch (error) {
-                        console.error(`Error during ${type} worker shutdown:`, error);
+                        // console.error(`Error during ${type} worker shutdown:`, error);
                         resolve(); // Resolve anyway to continue shutdown
                     }
                 })
@@ -513,7 +513,7 @@ export class WorkerManager extends EventEmitter {
         }
 
         await Promise.all(shutdownPromises);
-        console.log('All workers shut down');
+        // console.log('All workers shut down');
     }
 }
 
