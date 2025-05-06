@@ -255,11 +255,8 @@ function queueGroupNotification(
     message: string,
     topicId?: number
 ): boolean {
-    // Get group chat ID from environment
     const groupChatId = process.env.TELEGRAM_GROUP_ID;
     if (!groupChatId) {
-        // Just log at debug level since this is optional functionality
-        // console.debug('Group notifications not configured: TELEGRAM_GROUP_ID not set in environment');
         return false;
     }
 
@@ -271,26 +268,21 @@ function queueGroupNotification(
             retryCount: 0
         });
 
-        // If we have a topic ID and we're in a forum channel
         if (topicId) {
-            // Modify the last added notification to include the topic
             const lastNotification = notificationQueue[notificationQueue.length - 1];
             bot.sendMessage(lastNotification.userId, lastNotification.message, {
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,
                 message_thread_id: topicId
             }).then(() => {
-                // Remove from queue since we sent it directly
                 notificationQueue.pop();
             }).catch((error) => {
-                // console.error(`Error sending to topic ${topicId}:`, error);
                 // Keep in queue for normal processing
             });
         }
 
         return true;
     } catch (error) {
-        // console.error(`Error queueing group notification:`, error);
         return false;
     }
 }

@@ -86,8 +86,6 @@ class VybeWebSocketService {
         }
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             console.warn("WebSocket already connected. To change filters, stop and restart.");
-            // Optionally, allow re-sending configure message if supported
-            // this.sendConfiguration(filters);
             return;
         }
         if (this.isConnecting) {
@@ -95,7 +93,7 @@ class VybeWebSocketService {
             return;
         }
 
-        this.currentFilters = filters; // Store filters for potential reconnects
+        this.currentFilters = filters;
         console.log(`Attempting to connect to ${VYBE_WEBSOCKET_URI}...`);
         this.connect();
     }

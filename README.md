@@ -69,7 +69,6 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   `/unsubscribe_kol_updates`: Opts out of receiving periodic KOL ranking change notifications.
 
 ### Token Price Alerts
-*   `/track_token`: Initiates tracking a token (enter symbol or address when prompted) for significant price movement alerts.
 *   `/set_alert`: Initiates setting a specific price target alert for a token (enter symbol/address and then target price when prompted).
 *   `/my_alerts`: Displays your currently active price target alerts with their status and IDs.
 *   `/remove_alert`: Initiates removing a specific price target alert (enter the alert ID when prompted).

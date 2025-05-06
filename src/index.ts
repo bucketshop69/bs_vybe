@@ -6,7 +6,6 @@ import { vybeWebSocketService } from './services/vybeWebSocket';
 import { generateCurrentFilters } from './filterService';
 import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
 import WalletActivityHandler from './services/walletActivityHandler';
-// import PriceAlertHandler from './services/priceAlertHandler'; // Reverted Import
 
 // --- WebSocket Filter Update Handler ---
 // Debounce state for filter updates
@@ -14,33 +13,22 @@ let filterUpdateTimeout: NodeJS.Timeout | null = null;
 const FILTER_UPDATE_DEBOUNCE_MS = 2500; // 2.5 seconds debounce
 
 async function handleFilterUpdate(db: any) {
-    // Clear any existing scheduled update
     if (filterUpdateTimeout) {
         clearTimeout(filterUpdateTimeout);
     }
 
-    // Schedule the update
     filterUpdateTimeout = setTimeout(async () => {
-        filterUpdateTimeout = null; // Clear the handle once executed
-        console.log('[Index] Debounced filter update triggered.');
+        filterUpdateTimeout = null;
         try {
             const newFilters = await generateCurrentFilters(db);
-
-            // Stop the current connection
-            // Assuming vybeWebSocketService is initialized and available
             vybeWebSocketService.stopWebSocket();
-
-            // Optional slight delay before restarting
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Restart with new filters (only if filters were generated)
-            if (Object.keys(newFilters).length > 0) { // Check if filters object is not empty
+            if (Object.keys(newFilters).length > 0) {
                 vybeWebSocketService.startWebSocket(newFilters);
-                console.log('[Index] WebSocket restarted with updated filters.');
             } else {
                 console.warn('[Index] No filters generated, WebSocket not restarted.');
             }
-
         } catch (error) {
             console.error('[Index] Error during handleFilterUpdate:', error);
         }
@@ -78,14 +66,6 @@ async function startApp() {
         handleFilterUpdate(db).catch(err => console.error("[Index] Error scheduling filter update:", err));
     });
 
-    // Add listener for price alert changes (Reverted)
-    /*
-    appEvents.on('PRICE_ALERTS_UPDATED', () => {
-        console.log('[Index] PRICE_ALERTS_UPDATED received, scheduling filter update.');
-        handleFilterUpdate(db).catch(err => console.error("[Index] Error scheduling filter update:", err));
-    });
-    */
-
     // Create worker manager
     console.log('Creating worker manager...');
     const workerManager = new WorkerManager(db);
@@ -94,15 +74,9 @@ async function startApp() {
     console.log('[Index] Initializing Wallet Activity Handler...');
     const walletActivityHandler = new WalletActivityHandler(db, workerManager);
 
-    // --- Instantiate Price Alert Handler (Reverted) ---
-    // console.log('[Index] Initializing Price Alert Handler...');
-    // const priceAlertHandler = new PriceAlertHandler(db, workerManager);
-
     // --- Register WebSocket Message Handlers ---
     console.log('[Index] Registering WebSocket message handlers...');
     vybeWebSocketService.onMessageHandler(walletActivityHandler.handleWebSocketMessage);
-    // vybeWebSocketService.onMessageHandler(priceAlertHandler.handleWebSocketMessage); // Reverted Registration
-    // TODO: Register price handler when implemented
 
     // Listen for all workers ready
     workerManager.once(WorkerManagerEvent.ALL_WORKERS_READY, () => {
@@ -137,13 +111,10 @@ async function startApp() {
         // Set up price update and alert listeners
         console.log('Setting up price event listeners...');
         workerManager.setupPriceUpdateListener((data) => {
-            // console.log('Price update received:', data);
             // TODO: Add logic here to potentially forward updates (e.g., to Telegram users requesting live prices)
         });
 
         workerManager.setupPriceAlertListener((alertType, token, data) => {
-
-            // --- BEGIN: Construct and send alert notification message --- 
             try {
                 let userIds: number[] = [];
                 const payload: any = {
@@ -155,31 +126,26 @@ async function startApp() {
                 if (alertType === 'target' && data?.userAlert?.user_id) {
                     userIds = [data.userAlert.user_id];
                     payload.targetPrice = data.userAlert.target_price;
-                    payload.isAboveTarget = data.userAlert.is_above_target; // Include direction for better message formatting
+                    payload.isAboveTarget = data.userAlert.is_above_target;
                 } else if (alertType === 'general' && Array.isArray(data?.userIds) && data.userIds.length > 0) {
                     userIds = data.userIds;
                     payload.percentChange = data.percentChange;
                     payload.previousPrice = data.previousPrice;
                 } else {
                     console.warn('[Index] Could not determine target user IDs for price alert. Skipping notification.', { alertType, token, data });
-                    return; // Don't proceed if no valid recipients
+                    return;
                 }
 
                 payload.userIds = userIds;
-
-                // Construct the message to send to the Telegram worker
                 const message = {
                     type: 'SEND_PRICE_ALERT_NOTIFICATION',
                     payload: payload
                 };
 
-                console.log(`[Index] Sending alert message to Telegram worker:`, message);
                 workerManager.sendToWorker(WorkerType.TELEGRAM, message);
-
             } catch (error) {
                 console.error('[Index] Error processing price alert for notification:', error, { alertType, token, data });
             }
-            // --- END: Construct and send alert notification message ---
         });
 
         // Start the token price service
@@ -189,7 +155,6 @@ async function startApp() {
         // Start the Wallet Activity worker
         console.log('Starting Wallet Activity worker...');
         await workerManager.startWorker(WorkerType.WALLET_ACTIVITY);
-
 
         // Set up wallet activity listener
         workerManager.setupWalletActivityListener((walletAddress, activity) => {
