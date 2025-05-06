@@ -154,18 +154,6 @@ export async function initializeDatabase() {
             )
         `);
 
-        // Global subscriptions for general price movement alerts
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS token_alert_subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                mint_address TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(user_id),
-                UNIQUE(user_id, mint_address)
-            )
-        `);
-
         // Table for users who opted out of KOL updates
         await db.exec(`
             CREATE TABLE IF NOT EXISTS kol_update_unsubscriptions (
@@ -384,102 +372,6 @@ export async function addPriceHistoryEntry(
     // This function is now deprecated - we're using in-memory storage instead
     // console.warn('addPriceHistoryEntry is deprecated - using in-memory storage instead');
     return true;
-}
-
-// Subscribe user to general price alerts for a token
-export async function subscribeToTokenAlerts(
-    db: any,
-    userId: number,
-    mintAddress: string
-): Promise<boolean> {
-    try {
-        // First ensure user exists
-        await db.run(
-            'INSERT OR IGNORE INTO users (user_id) VALUES (?)',
-            [userId]
-        );
-
-        // Then add the subscription
-        await db.run(
-            `INSERT OR IGNORE INTO token_alert_subscriptions (
-                user_id, mint_address
-            ) VALUES (?, ?)`,
-            [userId, mintAddress]
-        );
-        return true;
-    } catch (error) {
-        // console.error(`Error subscribing user ${userId} to alerts for ${mintAddress}:`, error);
-        return false;
-    }
-}
-
-// Unsubscribe user from general price alerts for a token
-export async function unsubscribeFromTokenAlerts(
-    db: any,
-    userId: number,
-    mintAddress: string
-): Promise<boolean> {
-    try {
-        const result = await db.run(
-            `DELETE FROM token_alert_subscriptions
-             WHERE user_id = ? AND mint_address = ?`,
-            [userId, mintAddress]
-        );
-
-        return result.changes > 0;
-    } catch (error) {
-        // console.error(`Error unsubscribing user ${userId} from alerts for ${mintAddress}:`, error);
-        return false;
-    }
-}
-
-// Get all token alert subscriptions for a user
-export async function getUserTokenSubscriptions(db: any, userId: number): Promise<Array<{
-    mint_address: string;
-    symbol: string;
-    name: string;
-    current_price: number;
-}>> {
-    try {
-        return await db.all(
-            `SELECT tas.mint_address, tp.symbol, tp.name, tp.current_price
-             FROM token_alert_subscriptions tas
-             LEFT JOIN token_prices tp ON tas.mint_address = tp.mint_address
-             WHERE tas.user_id = ?`,
-            [userId]
-        );
-    } catch (error) {
-        // console.error(`Error getting token subscriptions for user ${userId}:`, error);
-        return [];
-    }
-}
-
-// Get count of token alerts subscribed by a user
-export async function getTokenSubscriptionCount(db: any, userId: number): Promise<number> {
-    try {
-        const result = await db.get(
-            'SELECT COUNT(*) as count FROM token_alert_subscriptions WHERE user_id = ?',
-            [userId]
-        );
-        return result.count;
-    } catch (error) {
-        // console.error(`Error getting token subscription count for user ${userId}:`, error);
-        return 0;
-    }
-}
-
-// Get all users subscribed to a specific token
-export async function getTokenSubscribers(db: any, mintAddress: string): Promise<number[]> {
-    try {
-        const subscribers = await db.all(
-            'SELECT user_id FROM token_alert_subscriptions WHERE mint_address = ?',
-            [mintAddress]
-        );
-        return subscribers.map((row: { user_id: number }) => row.user_id);
-    } catch (error) {
-        // console.error(`Error getting subscribers for token ${mintAddress}:`, error);
-        return [];
-    }
 }
 
 // Create a specific price alert for a user

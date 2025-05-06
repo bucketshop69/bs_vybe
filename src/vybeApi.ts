@@ -241,7 +241,6 @@ export async function getTokenDetails(mintAddress: string): Promise<TokenDetails
                 }
             }
         );
-
         return response.data;
     } catch (error) {
         // console.error(`Error fetching token details for ${mintAddress}:`, error);

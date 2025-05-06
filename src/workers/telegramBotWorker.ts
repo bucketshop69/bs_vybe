@@ -1,5 +1,5 @@
 import { parentPort } from 'worker_threads';
-import { bot, setupBot } from '../telegram';
+import { bot, setupBot, formatWalletTransferNotification } from '../telegram';
 
 // Ensure we have the parent port
 if (!parentPort) {
@@ -129,6 +129,37 @@ port.on('message', async (message) => {
                         // Handle potential errors like user blocking the bot
                         // console.error(`[TelegramWorker] Failed to send alert to user ${userId}:`, error.message || error);
                         // Consider adding logic here to mark the user as inactive or handle specific error codes
+                    }
+                }
+                break;
+
+            case 'SEND_WALLET_ACTIVITY_NOTIFICATION':
+                console.log('[TelegramWorker] Received SEND_WALLET_ACTIVITY_NOTIFICATION:', message.payload);
+                const activityPayload = message.payload;
+
+                if (!activityPayload || !activityPayload.userId || !activityPayload.walletAddress || !activityPayload.transfer) {
+                    console.warn('[TelegramWorker] Invalid or missing data in wallet activity payload. Skipping.', activityPayload);
+                    return;
+                }
+
+                // Format the message using the function from telegram.ts
+                // Note: The current handler sends one notification per transfer. 
+                // We adapt by passing the single transfer in an array.
+                const formattedActivityMessage = formatWalletTransferNotification(
+                    activityPayload.walletAddress,
+                    [activityPayload.transfer] // Wrap single transfer in an array for the formatter
+                );
+
+                if (formattedActivityMessage) {
+                    try {
+                        console.log(`[TelegramWorker] Sending wallet activity alert to user ${activityPayload.userId}`);
+                        await bot.sendMessage(activityPayload.userId, formattedActivityMessage, {
+                            parse_mode: 'Markdown',
+                            disable_web_page_preview: true
+                        });
+                    } catch (error: any) {
+                        console.error(`[TelegramWorker] Failed to send activity alert to user ${activityPayload.userId}:`, error.message || error);
+                        // Handle potential errors like user blocking the bot
                     }
                 }
                 break;

@@ -56,7 +56,7 @@ export const PRICE_ALERT_CONFIG = {
     pollingIntervalMs: 3600 * 1000,           // 1h minute in milliseconds
     generalAlertThresholdPercent: 2.5,        // 3% change triggers general alert
     maxAlertsPerUser: 5,                    // Maximum 5 alerts per user
-    tooCloseThresholdPercent: 1,            // Target within 2% of current price is too close
+    tooCloseThresholdPercent: 0.2,            // Target within 2% of current price is too close
     tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
 };
 

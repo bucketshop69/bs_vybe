@@ -2,6 +2,50 @@ import 'dotenv/config';
 import { initializeDatabase } from './database';
 import WorkerManager, { WorkerType, WorkerManagerEvent } from './workerManager';
 import { startKolRankingService } from './kolRankingService';
+import { vybeWebSocketService } from './services/vybeWebSocket';
+import { generateCurrentFilters } from './filterService';
+import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
+import WalletActivityHandler from './services/walletActivityHandler';
+// import PriceAlertHandler from './services/priceAlertHandler'; // Reverted Import
+
+// --- WebSocket Filter Update Handler ---
+// Debounce state for filter updates
+let filterUpdateTimeout: NodeJS.Timeout | null = null;
+const FILTER_UPDATE_DEBOUNCE_MS = 2500; // 2.5 seconds debounce
+
+async function handleFilterUpdate(db: any) {
+    // Clear any existing scheduled update
+    if (filterUpdateTimeout) {
+        clearTimeout(filterUpdateTimeout);
+    }
+
+    // Schedule the update
+    filterUpdateTimeout = setTimeout(async () => {
+        filterUpdateTimeout = null; // Clear the handle once executed
+        console.log('[Index] Debounced filter update triggered.');
+        try {
+            const newFilters = await generateCurrentFilters(db);
+
+            // Stop the current connection
+            // Assuming vybeWebSocketService is initialized and available
+            vybeWebSocketService.stopWebSocket();
+
+            // Optional slight delay before restarting
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Restart with new filters (only if filters were generated)
+            if (Object.keys(newFilters).length > 0) { // Check if filters object is not empty
+                vybeWebSocketService.startWebSocket(newFilters);
+                console.log('[Index] WebSocket restarted with updated filters.');
+            } else {
+                console.warn('[Index] No filters generated, WebSocket not restarted.');
+            }
+
+        } catch (error) {
+            console.error('[Index] Error during handleFilterUpdate:', error);
+        }
+    }, FILTER_UPDATE_DEBOUNCE_MS);
+}
 
 /**
  * Start the application with worker threads
@@ -22,9 +66,43 @@ async function startApp() {
     console.log('Initializing database...');
     const db = await initializeDatabase();
 
+    // --- Initialize WebSocket Service EARLY ---
+    // Needs to be initialized before listeners are set up
+    console.log('[Index] Initializing WebSocket Service...');
+    vybeWebSocketService.initialize(); // Reads API key from process.env.VYBE_KEY
+
+    // --- Setup Event Listener for Filter Updates ---
+    console.log('[Index] Setting up listener for tracked wallet changes...');
+    appEvents.on(EVENT_TRACKED_WALLETS_CHANGED, () => {
+        console.log('[Index] EVENT_TRACKED_WALLETS_CHANGED received, scheduling filter update.');
+        handleFilterUpdate(db).catch(err => console.error("[Index] Error scheduling filter update:", err));
+    });
+
+    // Add listener for price alert changes (Reverted)
+    /*
+    appEvents.on('PRICE_ALERTS_UPDATED', () => {
+        console.log('[Index] PRICE_ALERTS_UPDATED received, scheduling filter update.');
+        handleFilterUpdate(db).catch(err => console.error("[Index] Error scheduling filter update:", err));
+    });
+    */
+
     // Create worker manager
     console.log('Creating worker manager...');
     const workerManager = new WorkerManager(db);
+
+    // --- Instantiate Wallet Activity Handler ---
+    console.log('[Index] Initializing Wallet Activity Handler...');
+    const walletActivityHandler = new WalletActivityHandler(db, workerManager);
+
+    // --- Instantiate Price Alert Handler (Reverted) ---
+    // console.log('[Index] Initializing Price Alert Handler...');
+    // const priceAlertHandler = new PriceAlertHandler(db, workerManager);
+
+    // --- Register WebSocket Message Handlers ---
+    console.log('[Index] Registering WebSocket message handlers...');
+    vybeWebSocketService.onMessageHandler(walletActivityHandler.handleWebSocketMessage);
+    // vybeWebSocketService.onMessageHandler(priceAlertHandler.handleWebSocketMessage); // Reverted Registration
+    // TODO: Register price handler when implemented
 
     // Listen for all workers ready
     workerManager.once(WorkerManagerEvent.ALL_WORKERS_READY, () => {
@@ -41,6 +119,12 @@ async function startApp() {
         // Initialize the Telegram bot without passing DB directly
         console.log('Setting up Telegram bot...');
         await workerManager.setupTelegramBot();
+
+        // --- Start WebSocket Service (Initial Filters) ---
+        // Call handleFilterUpdate *once* after init to set initial filters
+        console.log('[Index] Setting initial WebSocket filters...');
+        await handleFilterUpdate(db);
+        // Note: Depending on timing, might need await here or ensure handleFilterUpdate completes before proceeding
 
         // Start the Token Price worker
         console.log('Starting Token Price worker...');
@@ -106,9 +190,6 @@ async function startApp() {
         console.log('Starting Wallet Activity worker...');
         await workerManager.startWorker(WorkerType.WALLET_ACTIVITY);
 
-        // Start wallet activity polling
-        console.log('Starting wallet activity polling...');
-        await workerManager.startWalletPolling();
 
         // Set up wallet activity listener
         workerManager.setupWalletActivityListener((walletAddress, activity) => {
@@ -119,15 +200,18 @@ async function startApp() {
         console.log('Starting KOL ranking service...');
         await startKolRankingService(db);
 
-        console.log('All workers started successfully');
+        console.log('All services and workers started successfully');
     } catch (error) {
-        console.error('Error starting workers:', error);
+        console.error('Error starting workers or services:', error);
         process.exit(1);
     }
 
     // Graceful shutdown handler
     process.on('SIGINT', async () => {
         console.log('Shutting down gracefully...');
+
+        // Stop WebSocket Service first
+        vybeWebSocketService.stopWebSocket();
 
         // Shutdown all workers
         await workerManager.shutdown();

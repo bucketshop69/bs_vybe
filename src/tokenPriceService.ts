@@ -30,13 +30,6 @@ const tokenPriceHistory: {
 // Maximum history points to keep per token (1 point per minute, 60 points = 1 hour of data)
 const MAX_HISTORY_POINTS = 60;
 
-// State for General Alert Noise Reduction
-interface GeneralAlertState {
-    direction: 'up' | 'down' | 'none'; // Which threshold was last crossed
-    notifiedPrice: number;          // Price when the last notification for this direction was sent
-}
-const generalAlertState: { [mintAddress: string]: GeneralAlertState } = {};
-
 /**
  * Add a new price point to the in-memory history
  * @param mintAddress Token mint address
@@ -339,56 +332,6 @@ async function processTokenUpdate(
 
     // Check for target price alerts first (user-specific)
     await checkPriceTargets(db, token, previousPrice);
-
-    // --- General Alert Logic ---
-    const threshold = PRICE_ALERT_CONFIG.generalAlertThresholdPercent;
-    const absChange = Math.abs(percentChange);
-    let shouldTriggerGeneralAlert = false;
-    let alertDirection: 'up' | 'down' | 'none' = 'none';
-
-    // Step 2.1: Implement Stateful Triggering (Noise Reduction)
-    const currentState = generalAlertState[mintAddress] || { direction: 'none', notifiedPrice: 0 };
-
-    if (percentChange >= threshold && currentState.direction !== 'up') {
-        // console.log(`[Service] General Alert Condition Met (UP) for ${token.symbol}: ${percentChange.toFixed(2)}% >= ${threshold}%`);
-        shouldTriggerGeneralAlert = true;
-        alertDirection = 'up';
-        generalAlertState[mintAddress] = { direction: 'up', notifiedPrice: token.current_price };
-    } else if (percentChange <= -threshold && currentState.direction !== 'down') {
-        // console.log(`[Service] General Alert Condition Met (DOWN) for ${token.symbol}: ${percentChange.toFixed(2)}% <= -${threshold}%`);
-        shouldTriggerGeneralAlert = true;
-        alertDirection = 'down';
-        generalAlertState[mintAddress] = { direction: 'down', notifiedPrice: token.current_price };
-    } else if (absChange < threshold && currentState.direction !== 'none') {
-        // console.log(`[Service] General Alert Reset for ${token.symbol}: Price returned within +/-${threshold}%`);
-        // Reset state when price comes back within threshold
-        generalAlertState[mintAddress] = { direction: 'none', notifiedPrice: 0 };
-        shouldTriggerGeneralAlert = false; // Ensure no alert is sent on reset
-    }
-    // else: Price is still above/below threshold but we already notified for this direction, OR price is within threshold. Do nothing.
-
-    if (shouldTriggerGeneralAlert && alertCallback) {
-        // console.log(`[Service] Preparing to fire general alert callback for ${token.symbol} (Direction: ${alertDirection})`);
-
-        // Step 1.3: Get ALL users for general alerts
-        const allUserIds = await getAllUserIds(db);
-
-        if (allUserIds.length > 0) {
-            // console.log(`[Service] !!! General Alert Triggered for ${token.symbol}: Change ${percentChange.toFixed(2)}%. Notifying ${allUserIds.length} potential users.`);
-
-            // Notify through callback
-            await alertCallback('general', token, {
-                percentChange,
-                previousPrice: previousPrice,
-                userIds: allUserIds // Send to all users
-            });
-
-        } else {
-            // console.log(`[Service] General Alert Triggered for ${token.symbol} but no users found in the database.`);
-        }
-    } else if (shouldTriggerGeneralAlert && !alertCallback) {
-        // console.warn(`[Service] General Alert Triggered for ${token.symbol} but no alertCallback is registered.`);
-    }
 }
 
 /**

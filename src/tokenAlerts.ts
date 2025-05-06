@@ -142,38 +142,6 @@ function formatPrice(price: number): string {
 }
 
 /**
- * Format a general price movement alert message
- * @param token Token data 
- * @param percentChange Percentage change
- * @param previousPrice Previous price
- * @returns Formatted message
- */
-function formatGeneralAlertMessage(
-    token: TokenPrice,
-    percentChange: number,
-    previousPrice: number
-): string {
-    const direction = percentChange >= 0 ? 'increased' : 'decreased';
-    const timeframe = '60 minutes'; // Based on our polling interval
-    const currentPrice = token?.current_price || 0;
-
-    let message = `🚨 <b>Price Alert: ${token.symbol}</b> 🚨\n\n`;
-    message += `The price of <b>${token.name}</b> has ${direction} by <b>${formatPercentChange(percentChange)}</b> in the last ${timeframe}.\n\n`;
-    message += `• Current Price: <b>${formatPrice(currentPrice)}</b>\n`;
-    message += `• Previous Price: ${formatPrice(previousPrice)}\n`;
-    message += `• Change: ${formatPercentChange(percentChange)}\n\n`;
-
-    // Add quick tips
-    if (percentChange >= 0) {
-        message += `📈 <i>Consider setting a price target alert if you want to take profit.</i>`;
-    } else {
-        message += `📉 <i>Consider setting a price target alert if you want to buy the dip.</i>`;
-    }
-
-    return message;
-}
-
-/**
  * Format a targeted price alert message
  * @param token Token data
  * @param alert User's price alert that was triggered
@@ -387,112 +355,27 @@ export async function sendPriceDigest(
  */
 const handlePriceAlert: PriceAlertCallback = async (alertType, token, data) => {
     try {
-        if (alertType === 'general' && data.percentChange !== undefined &&
-            data.previousPrice !== undefined && data.userIds && data.userIds.length > 0) {
-
-            // Format the general price movement alert message
-            const message = formatGeneralAlertMessage(
-                token,
-                data.percentChange,
-                data.previousPrice
-            );
-
-            // Send to all subscribers (with throttling)
-            let queuedCount = 0;
-            for (const userId of data.userIds) {
-                // Skip if we've sent an alert recently to this user for this token
-                if (shouldThrottleAlerts(token.mint_address, userId)) {
-                    continue;
-                }
-
-                const queued = queueNotification(userId, message);
-                if (queued) {
-                    queuedCount++;
-                    // Log the successful queuing to the user's file
-                    // console.log(`[DEBUG] Reached userLog call for User ID: ${userId}`);
-                    userLog(userId, `[Price Alert Sent] Token: ${token.symbol}`, {
-                        currentPrice: token.current_price.toFixed(6),
-                        previousPrice: data.previousPrice.toFixed(6),
-                        percentChange: data.percentChange.toFixed(2)
-                    });
-                }
-            }
-
-            // console.log(`Queued general price alerts for ${token.symbol} to ${queuedCount}/${data.userIds.length} users`);
-
-            // For significant price movements, also post to the group chat if configured
-            if (Math.abs(data.percentChange) >= 10 && process.env.TELEGRAM_GROUP_ID) {
-                const groupMessage = `<b>🚨 Significant Price Movement</b>\n\n${formatGroupDigestMessage(token, data.percentChange)}`;
-                queueGroupNotification(groupMessage);
-            }
-        }
-        else if (alertType === 'target' && data.userAlert) {
+        // Target Alert Handling
+        if (alertType === 'target' && data?.userAlert?.user_id) {
+            const userId = data.userAlert.user_id;
             // Format the targeted price alert message
             const message = formatTargetAlertMessage(token, data.userAlert);
 
             // No throttling for target alerts as they're one-time events
-            const queued = queueNotification(data.userAlert.user_id, message);
+            const queued = queueNotification(userId, message);
 
-            // console.log(
-            // `Queued price target alert for ${token.symbol} to user ${data.userAlert.user_id}: ` +
-            //     `${queued ? 'Success' : 'Failed'}`
-            // );
+            if (queued) {
+                userLog(userId, `[Price Alert Sent - Target] Token: ${token.symbol}`, {
+                    currentPrice: token.current_price.toFixed(6),
+                    targetPrice: data.userAlert.target_price.toFixed(6)
+                });
+            }
         }
+
     } catch (error) {
         // console.error('Error handling price alert:', error);
     }
 };
-
-/**
- * Send a test price alert to a user
- * @param userId User's Telegram ID
- * @param token Token data
- * @returns True if test alerts were queued
- */
-export async function sendTestPriceAlerts(userId: number, token: TokenPrice): Promise<boolean> {
-    try {
-        // Mock data for test alerts
-        const currentPrice = token?.current_price || 0;
-        const mockPercentChange = 4.75;
-        const mockPreviousPrice = currentPrice * (1 - mockPercentChange / 100);
-
-        // Send a test general price alert
-        const generalMessage = formatGeneralAlertMessage(
-            token,
-            mockPercentChange,
-            mockPreviousPrice
-        );
-
-        queueNotification(userId,
-            '📊 <b>TEST ALERT - General Price Movement</b>\n\n' + generalMessage
-        );
-
-        // Send a test target price alert
-        const mockTargetAlert: UserPriceAlert = {
-            id: 0,
-            user_id: userId,
-            mint_address: token.mint_address,
-            target_price: currentPrice * 1.05, // 5% higher
-            is_above_target: true,
-            is_triggered: false,
-            created_at: new Date().toISOString()
-        };
-
-        const targetMessage = formatTargetAlertMessage(token, mockTargetAlert);
-
-        queueNotification(userId,
-            '📊 <b>TEST ALERT - Price Target Reached</b>\n\n' + targetMessage
-        );
-
-        // Force queue processing immediately
-        await processNotificationQueue();
-
-        return true;
-    } catch (error) {
-        // console.error('Error sending test price alerts:', error);
-        return false;
-    }
-}
 
 /**
  * Get estimated time until a price target might be reached
