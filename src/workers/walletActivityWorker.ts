@@ -91,7 +91,6 @@ port.on('message', async (message) => {
                 break;
 
             case 'SHUTDOWN':
-                // console.log('Worker: Shutting down wallet activity service...');
                 isServiceRunning = false;
                 port.postMessage({
                     type: 'SHUTDOWN_COMPLETE',
@@ -100,13 +99,12 @@ port.on('message', async (message) => {
                 break;
 
             default:
-                // Skip DB_RESPONSE messages as they're handled separately
                 if (message.type !== 'DB_RESPONSE') {
-                    // console.warn(`Worker: Unknown message type: ${message.type}`);
+                    console.warn(`Worker: Unknown message type: ${message.type}`);
                 }
         }
     } catch (error: any) {
-        // console.error('Worker: Error processing message:', error);
+        console.error('Worker: Error processing message:', error);
         port.postMessage({
             type: 'ERROR',
             error: error.message,
@@ -118,7 +116,7 @@ port.on('message', async (message) => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-    // console.error('Worker: Uncaught exception:', error);
+    console.error('Worker: Uncaught exception:', error);
     port.postMessage({
         type: 'UNCAUGHT_EXCEPTION',
         error: error.message,
@@ -127,8 +125,8 @@ process.on('uncaughtException', (error: Error) => {
     });
 });
 
-// Log when worker starts successfully
-port.postMessage({ type: 'WORKER_STARTED', timestamp: Date.now() });
+// Send ready message when worker starts
+port.postMessage({ type: 'WORKER_READY', timestamp: Date.now() });
 
 // Initial check (Optional - can be removed if CHECK_WALLET is the only entry point)
 // console.log('Worker: Performing initial wallet activity check on startup...');

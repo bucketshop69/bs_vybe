@@ -68,6 +68,23 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   **Notifications:** Sends alerts directly to users via Telegram for tracked events (price movements, KOL trades, KOL ranking changes).
 *   **Automated Insights:** Can generate automated price chart snapshots and KOL activity summaries.
 
+## Automated Broadcasts
+
+The bot automatically sends two types of broadcasts to all users:
+
+1. **Price Board** (Every 4 hours)
+   - Shows current prices of tracked tokens
+   - Includes price changes and trends
+   - Sent as an image for better readability
+
+2. **Market Digest** (Every 12 hours)
+   - Comprehensive market overview
+   - Top performing tokens
+   - Trading volume analysis
+   - Sent as a formatted message
+
+Broadcasts start from server initialization time and continue on their respective intervals.
+
 ## 🔧 Setup & Installation
 
 1.  **Clone the repository:**

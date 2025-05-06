@@ -128,7 +128,6 @@ export function setupBot(db: any) {
     // Add a /help command that shows the same information as /start
     bot.onText(/\/help/, async (msg) => {
         const chatId = msg.chat.id;
-        // console.log('Received /help command from chatId:', chatId);
         await bot.sendMessage(chatId,
             `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
 
@@ -137,9 +136,6 @@ export function setupBot(db: any) {
             `/remove_wallet - Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
-            // `/track_token <code>symbol/address</code> - Get notified about price movements\n` + // Removed
-            // `  Example: /track_token SOL or /track_token 6p6xgHy...\n\n` +
-
             `/set_alert <code>symbol/address</code> <code>targetPrice</code> - Get notified when price reaches target\n` +
             `  Example: /set_alert SOL 100 or /set_alert BONK 0.00001\n\n` +
 
@@ -155,47 +151,13 @@ export function setupBot(db: any) {
 ` +
 
             `<b>ℹ️ OTHER COMMANDS</b>\n` +
-            `/testdigest - Test the DEX data functionality\n` +
             `/help - Show this message again\n\n` +
 
             `<b>🔔 ABOUT PRICE ALERTS:</b>\n` +
-            // `• General alerts trigger when price changes by ${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}% or more\n` + // Removed
             `• Price target alerts trigger when a token crosses your specified price\n` +
             `• You can set up to ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts`,
             { parse_mode: 'HTML' }
         );
-    });
-
-    // TODO: Remove this command
-    bot.onText(/\/prices/, async (msg: any) => {
-        // Ensure msg.chat exists (it always should for onText)
-        const chatId: number = msg.chat.id;
-        // console.log(`Received /prices command from chat ID: ${chatId}`);
-
-        try {
-            // Optional: Notify user work is starting
-            await bot.sendChatAction(chatId, 'upload_photo');
-
-            // console.log('Generating price board image...');
-            const imageBuffer: Buffer = await generatePriceBoardImage();
-            // console.log('Image generated, sending photo...');
-
-            // Send the image buffer
-            await bot.sendPhoto(chatId, imageBuffer, {
-                caption: 'Latest Solana Token Prices ✨'
-                // You can add parse_mode: 'MarkdownV2' or 'HTML' if needed for the caption
-            });
-            // console.log('Photo sent successfully.');
-
-        } catch (error: unknown) { // Catch unknown type first
-            // console.error('Failed to handle /prices command:', error);
-            let errorMessage = '❌ Sorry, I couldn\'t generate the price image right now. Please try again later.';
-            if (error instanceof Error) {
-                errorMessage = `❌ Error generating image: ${error.message}`;
-            }
-            // Send error message to user
-            await bot.sendMessage(chatId, errorMessage);
-        }
     });
 
     // Handle /tracked_wallets command
@@ -680,31 +642,6 @@ export function setupBot(db: any) {
         const chatId = msg.chat.id;
         usersWaitingToRemoveAlert.set(chatId, true);
         await bot.sendMessage(chatId, '🔍 Please enter the ID of the alert you want to remove.\n\nYou can view your alerts with /my_alerts');
-    });
-
-    // Handle /testdigest command
-    bot.onText(/\/testdigest/, async (msg) => {
-        const chatId = msg.chat.id;
-        try {
-            await bot.sendMessage(chatId, "Fetching DEX data and preparing digest...");
-
-            // Get the ranked data
-            const rankedData = await getRankedDexData();
-            if (!rankedData || rankedData.length === 0) {
-                throw new Error('No DEX data available');
-            }
-
-            // Format the message
-            const message = formatDigestMessage(rankedData);
-
-            // Send the digest directly to the user
-            await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-
-            await bot.sendMessage(chatId, "✅ Digest generated successfully!");
-        } catch (error) {
-            // console.error('Error in /testdigest command:', error);
-            await bot.sendMessage(chatId, `❌ Error generating digest: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
     });
 
     // Update the /kols command handler

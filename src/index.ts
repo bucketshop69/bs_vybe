@@ -6,6 +6,8 @@ import { vybeWebSocketService } from './services/vybeWebSocket';
 import { generateCurrentFilters } from './filterService';
 import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
 import WalletActivityHandler from './services/walletActivityHandler';
+import { startScheduler } from './scheduler';
+import { bot } from './telegram';
 
 // --- WebSocket Filter Update Handler ---
 // Debounce state for filter updates
@@ -164,6 +166,10 @@ async function startApp() {
         // Start the KOL ranking check service
         console.log('Starting KOL ranking service...');
         await startKolRankingService(db);
+
+        // Start automated broadcast scheduler
+        console.log('Starting automated broadcast scheduler...');
+        await startScheduler(db, bot);
 
         console.log('All services and workers started successfully');
     } catch (error) {

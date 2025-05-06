@@ -180,7 +180,8 @@ export class WorkerManager extends EventEmitter {
             return;
         }
 
-        if (message.type === 'WORKER_READY') {
+        // Handle both WORKER_READY and type-specific ready messages
+        if (message.type === 'WORKER_READY' || message.type === `${type}_ready`) {
             const workerState = this.workers.get(type);
             if (workerState) {
                 workerState.isReady = true;

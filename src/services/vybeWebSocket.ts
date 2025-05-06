@@ -209,15 +209,9 @@ class VybeWebSocketService {
     private onMessage(message: WebSocket.Data): void {
         try {
             const messageString = message.toString();
-            // console.log(`[VybeWebSocketService] Raw message received: ${messageString.substring(0, 200)}...`); // Log raw message
-
             const parsedMessage = JSON.parse(messageString);
-            console.log(`[VybeWebSocketService] Parsed message type: ${parsedMessage?.type || 'N/A'}`); // Log parsed type
-            // console.log('[VybeWebSocketService] Full parsed message:', JSON.stringify(parsedMessage, null, 2)); // Reverted Debug Log
-
             // Distribute message to all registered handlers
             if (this.messageHandlers.length > 0) {
-                console.log(`[VybeWebSocketService] Distributing message to ${this.messageHandlers.length} handler(s)...`);
                 this.messageHandlers.forEach(handler => {
                     try {
                         handler(parsedMessage);
