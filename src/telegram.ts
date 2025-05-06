@@ -5,8 +5,6 @@ import {
     addTrackedWallet,
     getUserTrackedWallets,
     removeTrackedWallet,
-    subscribeToTokenAlerts,
-    getTokenSubscriptionCount,
     createPriceAlert,
     getUserPriceAlerts,
     removePriceAlert,
@@ -17,8 +15,10 @@ import {
 } from './database';
 import { getTokenPriceChange } from './tokenPriceService';
 import { PRICE_ALERT_CONFIG } from './config';
-import { sendTestPriceAlerts, estimateTimeToTarget, formatTimeEstimate, validatePriceTarget } from './tokenAlerts';
+import { estimateTimeToTarget, formatTimeEstimate, validatePriceTarget } from './tokenAlerts';
 import { generatePriceBoardImage } from './utils/imageGenerator';
+import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
+import { VybeTransfer } from './vybeApi';
 
 dotenv.config();
 
@@ -44,7 +44,7 @@ let isPolling = false;
 const usersWaitingForWallet = new Map<number, boolean>();
 const usersWaitingToRemoveWallet = new Map<number, boolean>();
 // Map to track users waiting for token input
-const usersWaitingForToken = new Map<number, boolean>();
+// const usersWaitingForToken = new Map<number, boolean>(); // Removed
 // Map to track users waiting for alert token and price
 const usersWaitingForAlertToken = new Map<number, boolean>();
 const usersWaitingForAlertPrice = new Map<number, { token: string }>();
@@ -70,8 +70,10 @@ function truncateAddress(address: string, startChars = 6, endChars = 4): string 
 bot.setMyCommands([
     { command: 'start', description: 'Start the bot and see available commands' },
     { command: 'kols', description: 'View top KOL traders and their performance' },
-    { command: 'track_token', description: 'Track a token for price alerts' },
+    // { command: 'track_token', description: 'Track a token for price alerts' }, // Removed
     { command: 'set_alert', description: 'Set price target alert for a token' },
+    { command: 'my_alerts', description: 'View your active price alerts' },
+    { command: 'remove_alert', description: 'Remove a specific price alert' },
 ]).then(() => {
     // console.log('Bot commands menu set successfully');
 }).catch((error) => {
@@ -115,7 +117,7 @@ export function setupBot(db: any) {
                 `🔔 Get updates on Top KOL ranking changes!\n\n` +
 
                 `<b>💰 PRICE ALERTS</b>\n` +
-                `/track_token - Get alerts for price movements\n` +
+                // `/track_token - Get alerts for price movements\n` + // Removed
                 `/set_alert - Set target price alerts\n` +
                 `/my_alerts - View your active alerts\n` +
                 `/remove_alert id - Remove an alert\n\n`,
@@ -125,9 +127,7 @@ export function setupBot(db: any) {
 
     // Add a /help command that shows the same information as /start
     bot.onText(/\/help/, async (msg) => {
-        // Just call the same code that /start would call
         const chatId = msg.chat.id;
-        // console.log('Received /help command from chatId:', chatId);
         await bot.sendMessage(chatId,
             `🚀 <b>Welcome to the Vybe Bot!</b> 🚀\n\n` +
 
@@ -136,9 +136,6 @@ export function setupBot(db: any) {
             `/remove_wallet - Stop tracking a wallet\n\n` +
 
             `<b>💰 TOKEN PRICE ALERTS</b>\n` +
-            `/track_token <code>symbol/address</code> - Get notified about price movements\n` +
-            `  Example: /track_token SOL or /track_token 6p6xgHy...\n\n` +
-
             `/set_alert <code>symbol/address</code> <code>targetPrice</code> - Get notified when price reaches target\n` +
             `  Example: /set_alert SOL 100 or /set_alert BONK 0.00001\n\n` +
 
@@ -148,51 +145,19 @@ export function setupBot(db: any) {
             `<b>🏆 KOL TRACKING</b>\n` +
             `/kols - View top KOL traders and their performance\n` +
             `  ➕ Use /track_kol (after /kols) to track a KOL's wallet\n` +
-            `🔔 Get periodic updates on Top KOL ranking changes!\n` +
-            `  /unsubscribe_kol_updates - Opt-out of KOL updates\n\n` +
+            `🔔 Get periodic updates on Top KOL ranking changes!
+` +
+            `  /unsubscribe_kol_updates - Opt-out of KOL updates\n
+` +
 
             `<b>ℹ️ OTHER COMMANDS</b>\n` +
-            `/testdigest - Test the DEX data functionality\n` +
             `/help - Show this message again\n\n` +
 
             `<b>🔔 ABOUT PRICE ALERTS:</b>\n` +
-            `• General alerts trigger when price changes by ${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}% or more\n` +
             `• Price target alerts trigger when a token crosses your specified price\n` +
             `• You can set up to ${PRICE_ALERT_CONFIG.maxAlertsPerUser} price alerts`,
             { parse_mode: 'HTML' }
         );
-    });
-
-    // TODO: Remove this command
-    bot.onText(/\/prices/, async (msg: any) => {
-        // Ensure msg.chat exists (it always should for onText)
-        const chatId: number = msg.chat.id;
-        // console.log(`Received /prices command from chat ID: ${chatId}`);
-
-        try {
-            // Optional: Notify user work is starting
-            await bot.sendChatAction(chatId, 'upload_photo');
-
-            // console.log('Generating price board image...');
-            const imageBuffer: Buffer = await generatePriceBoardImage();
-            // console.log('Image generated, sending photo...');
-
-            // Send the image buffer
-            await bot.sendPhoto(chatId, imageBuffer, {
-                caption: 'Latest Solana Token Prices ✨'
-                // You can add parse_mode: 'MarkdownV2' or 'HTML' if needed for the caption
-            });
-            // console.log('Photo sent successfully.');
-
-        } catch (error: unknown) { // Catch unknown type first
-            // console.error('Failed to handle /prices command:', error);
-            let errorMessage = '❌ Sorry, I couldn\'t generate the price image right now. Please try again later.';
-            if (error instanceof Error) {
-                errorMessage = `❌ Error generating image: ${error.message}`;
-            }
-            // Send error message to user
-            await bot.sendMessage(chatId, errorMessage);
-        }
     });
 
     // Handle /tracked_wallets command
@@ -322,6 +287,8 @@ export function setupBot(db: any) {
 
             try {
                 await addTrackedWallet(db, chatId, text);
+                // Emit event after successful add
+                appEvents.emit(EVENT_TRACKED_WALLETS_CHANGED);
                 await bot.sendMessage(
                     chatId,
                     `✅ Now tracking wallet \`${text}\` for new transfers. You'll get alerts here.`,
@@ -353,12 +320,23 @@ export function setupBot(db: any) {
             }
 
             try {
-                await removeTrackedWallet(db, chatId, text);
-                await bot.sendMessage(
-                    chatId,
-                    `✅ Stopped tracking wallet \`${text}\`.`,
-                    { parse_mode: 'Markdown' }
-                );
+                const removed = await removeTrackedWallet(db, chatId, text);
+                if (removed) {
+                    // Emit event after successful removal
+                    appEvents.emit(EVENT_TRACKED_WALLETS_CHANGED);
+                    await bot.sendMessage(
+                        chatId,
+                        `✅ Stopped tracking wallet \`${text}\`.`,
+                        { parse_mode: 'Markdown' }
+                    );
+                } else {
+                    // Handle case where wallet wasn't found or couldn't be removed
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Wallet \`${text}\` was not found in your tracked list.`,
+                        { parse_mode: 'Markdown' }
+                    );
+                }
             } catch (error) {
                 // console.error('Error in wallet removal:', error);
                 await bot.sendMessage(
@@ -369,77 +347,12 @@ export function setupBot(db: any) {
             }
         }
 
-        // Check if user is waiting for token input
+        // Check if user is waiting for token input (Removed)
+        /*
         if (usersWaitingForToken.get(chatId)) {
-            // Remove waiting state
-            usersWaitingForToken.delete(chatId);
-
-            // Send immediate feedback that we're processing
-            await bot.sendMessage(
-                chatId,
-                `🔍 Processing your request for token "${text}"...`,
-                { parse_mode: 'Markdown' }
-            );
-
-            try {
-                // Check if user has reached their subscription limit
-                const currentCount = await getTokenSubscriptionCount(db, chatId);
-                if (currentCount >= PRICE_ALERT_CONFIG.maxAlertsPerUser) {
-                    await bot.sendMessage(
-                        chatId,
-                        `❌ You've reached the maximum limit of ${PRICE_ALERT_CONFIG.maxAlertsPerUser} tracked tokens. ` +
-                        `Please remove some before adding more.\n\n` +
-                        `Use /my_alerts to view your current alerts.`
-                    );
-                    return;
-                }
-
-                // Get token details from input (could be symbol or address)
-                const token = await getTokenBySymbolOrAddress(text);
-
-                if (!token) {
-                    await bot.sendMessage(
-                        chatId,
-                        `❌ Token "${text}" not found. Please provide a valid token symbol or address.\n\n` +
-                        `Use /track_token to try again with a different token.`
-                    );
-                    return;
-                }
-
-                // Subscribe user to this token's alerts
-                await subscribeToTokenAlerts(db, chatId, token.mint_address);
-
-                // Get 24h price change for context
-                const priceChange24h = await getTokenPriceChange(db, token.mint_address, 24);
-                const changeText = priceChange24h ?
-                    `(${priceChange24h >= 0 ? '+' : ''}${priceChange24h.toFixed(2)}% in 24h)` : '';
-
-                await bot.sendMessage(
-                    chatId,
-                    `✅ Successfully set up tracking for <b>${token.name} (${token.symbol})</b>!\n\n` +
-                    `💰 Current price: $${token.current_price.toFixed(7)} ${changeText}\n\n` +
-                    `You'll receive alerts when price moves significantly (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%).\n\n` +
-                    `To set specific price targets, use:\n` +
-                    `/set_alert ${token.symbol} <code>target_price</code>`,
-                    { parse_mode: 'HTML' }
-                );
-
-                // Send a test alert if this is their first token
-                // if (currentCount === 0) {
-                //     // Wait a bit before sending test alert
-                //     setTimeout(async () => {
-                //         await sendTestPriceAlerts(chatId, token);
-                //     }, 3000);
-                // }
-            } catch (error) {
-                // console.error('Error in /track_token command:', error);
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Error tracking token: ${error instanceof Error ? error.message : 'Unknown error'}\n\n` +
-                    `Use /track_token to try again.`
-                );
-            }
+            // Entire block removed or commented out
         }
+        */
 
         // Check if user is waiting for alert token input
         if (usersWaitingForAlertToken.get(chatId)) {
@@ -565,9 +478,6 @@ export function setupBot(db: any) {
                     throw new Error('Failed to create price alert');
                 }
 
-                // Ensure user is also subscribed to general alerts for this token
-                await subscribeToTokenAlerts(db, chatId, token.mint_address);
-
                 // Get recent price change to estimate time to target
                 const recentChange = await getTokenPriceChange(db, token.mint_address, 1); // 1 hour change
                 let timeEstimate = '';
@@ -652,18 +562,18 @@ export function setupBot(db: any) {
         }
     });
 
-    // Handle /track_token command
+    // Handle /track_token command (Removed)
+    /*
     bot.onText(/\/track_token/, async (msg) => {
         const chatId = msg.chat.id;
-        // Set user as waiting for token input
         usersWaitingForToken.set(chatId, true);
         await bot.sendMessage(chatId, '🔍 Please enter the token symbol or address you want to track.\n\n', { parse_mode: 'Markdown' });
     });
+    */
 
     // Handle /set_alert command
     bot.onText(/\/set_alert/, async (msg) => {
         const chatId = msg.chat.id;
-        // Set user as waiting for token input
         usersWaitingForAlertToken.set(chatId, true);
         await bot.sendMessage(chatId, '🔍 Please enter the token symbol or address for your price alert.\n\n', { parse_mode: 'Markdown' });
     });
@@ -673,11 +583,8 @@ export function setupBot(db: any) {
         const chatId = msg.chat.id;
 
         try {
-            // Only fetch user-set price alerts now
-            // const subscriptions = await getUserTokenSubscriptions(db, chatId);
             const priceAlerts = await getUserPriceAlerts(db, chatId);
 
-            // Check only if user-set price alerts exist
             if (priceAlerts.length === 0) {
                 await bot.sendMessage(
                     chatId,
@@ -688,27 +595,10 @@ export function setupBot(db: any) {
 
             let message = `📊 <b>Your Token Alerts</b>\n\n`;
 
-            // Remove the section for General Price Movements based on subscriptions
+            // Removed the section for General Price Movements based on subscriptions
             /*
             if (subscriptions.length > 0) {
-                message += `<b>General Price Movements (±${PRICE_ALERT_CONFIG.generalAlertThresholdPercent}%):</b>\n`;
-
-                for (const sub of subscriptions) {
-                    // Get 24h change for context
-                    const change24h = await getTokenPriceChange(db, sub.mint_address, 24);
-                    const changeText = change24h !== null
-                        ? `(${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}% 24h)`
-                        : '';
-
-                    // Check if price is available
-                    const currentPrice = sub.current_price !== null && sub.current_price !== undefined
-                        ? `$${sub.current_price.toFixed(4)}`
-                        : 'Price unavailable';
-
-                    message += `• ${sub.symbol}: ${currentPrice} ${changeText}\n`;
-                }
-
-                message += `\n`;
+                 // Block removed or commented out
             }
             */
 
@@ -750,34 +640,8 @@ export function setupBot(db: any) {
     // Handle /remove_alert command
     bot.onText(/\/remove_alert/, async (msg) => {
         const chatId = msg.chat.id;
-        // Set user as waiting for alert ID
         usersWaitingToRemoveAlert.set(chatId, true);
         await bot.sendMessage(chatId, '🔍 Please enter the ID of the alert you want to remove.\n\nYou can view your alerts with /my_alerts');
-    });
-
-    // Handle /testdigest command
-    bot.onText(/\/testdigest/, async (msg) => {
-        const chatId = msg.chat.id;
-        try {
-            await bot.sendMessage(chatId, "Fetching DEX data and preparing digest...");
-
-            // Get the ranked data
-            const rankedData = await getRankedDexData();
-            if (!rankedData || rankedData.length === 0) {
-                throw new Error('No DEX data available');
-            }
-
-            // Format the message
-            const message = formatDigestMessage(rankedData);
-
-            // Send the digest directly to the user
-            await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-
-            await bot.sendMessage(chatId, "✅ Digest generated successfully!");
-        } catch (error) {
-            // console.error('Error in /testdigest command:', error);
-            await bot.sendMessage(chatId, `❌ Error generating digest: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
     });
 
     // Update the /kols command handler
@@ -971,6 +835,8 @@ export function setupBot(db: any) {
             }
             // Try to add the wallet
             await addTrackedWallet(db, chatId, walletAddress);
+            // Emit event after successful add
+            appEvents.emit(EVENT_TRACKED_WALLETS_CHANGED);
             await bot.sendMessage(chatId,
                 `✅ Now tracking <b>${kol.name}</b>'s wallet for new trades!\n You will receive alerts when they trade a new token.\n View all your tracked wallets with /tracked_wallets.`,
                 { parse_mode: 'HTML' });
@@ -1257,4 +1123,51 @@ export async function broadcastKOLUpdates(db: any, changes: KOLChangeData) {
     } catch (error) {
         // console.error('Error broadcasting KOL updates:', error);
     }
+}
+
+/**
+ * Formats a single transfer for display in notifications.
+ * (Adapted from pollingService.ts)
+ */
+function formatSingleTransferLine(transfer: VybeTransfer): string {
+    // TODO: Enhance formatting - e.g., show token symbol, amount, direction (in/out)
+    // Requires transfer object to potentially include tokenDetails 
+    // or fetch them based on mint address if available.
+    const time = new Date(transfer.blockTime * 1000).toLocaleTimeString(); // Use time only for brevity
+    const explorerUrl = `https://solscan.io/tx/${transfer.signature}`;
+    // Basic formatting for now:
+    return `💸 ${time} - [View on Solscan](${explorerUrl})`;
+}
+
+/**
+ * Formats the notification message for new wallet transfers.
+ * @param walletAddress The tracked wallet address.
+ * @param newTransfers Array of new transfer objects.
+ * @returns Formatted message string (Markdown).
+ */
+export function formatWalletTransferNotification(
+    walletAddress: string,
+    newTransfers: VybeTransfer[]
+): string {
+    if (!newTransfers || newTransfers.length === 0) {
+        return ''; // Should not happen if called correctly
+    }
+
+    // Sort by blockTime descending if not already
+    newTransfers.sort((a, b) => b.blockTime - a.blockTime);
+
+    const vybeLink = `https://vybe.fyi/wallets/${walletAddress}?tab=overview&order=blocktime&desc=true`;
+    let message = `🔔 *New Transfer(s) for* \`${truncateAddress(walletAddress)}\`\n`
+        + `[View All Activity on Vybe](${vybeLink})\n\n`;
+
+    // Add details for each transfer (limit to 5 most recent)
+    const transfersToShow = newTransfers.slice(0, 5);
+    message += transfersToShow.map(formatSingleTransferLine).join('\n'); // Use single newline
+
+    // If there are more transfers, add a count
+    if (newTransfers.length > 5) {
+        message += `\n\n📑 _+${newTransfers.length - 5} more transfers_`;
+    }
+
+    return message;
 }

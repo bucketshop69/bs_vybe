@@ -2,6 +2,55 @@
 
 **Access the live bot here:** [https://t.me/bs_vybe_bot](https://t.me/bs_vybe_bot)
 
+## 🏛️ Core Architecture
+
+The bot is built with a robust, scalable architecture that leverages worker threads for parallel processing and real-time data handling. Here's the core architecture:
+
+### Worker Thread System
+- **WorkerManager**: Central orchestrator managing multiple worker threads
+  - Handles worker lifecycle (start, stop, restart)
+  - Manages inter-worker communication
+  - Implements automatic recovery on failures
+  - Supports different worker types:
+    - Telegram Bot Worker
+    - Token Price Worker
+    - Wallet Activity Worker
+    - Alert Processing Worker
+
+### Real-time Data Processing
+- **VybeWebSocket Service**: Handles real-time data streams
+  - Manages WebSocket connections with automatic reconnection
+  - Implements filter-based data subscription
+  - Handles message routing to appropriate handlers
+  - Supports multiple data types (transfers, trades, prices)
+
+### Price Alert System
+- **Token Price Service**: Manages token price monitoring
+  - Implements smart polling with exponential backoff
+  - Maintains price history for trend analysis
+  - Handles price target detection
+  - Manages alert distribution
+
+### Database Layer
+- **Database Service**: Centralized data management
+  - Handles user subscriptions
+  - Manages tracked wallets
+  - Stores price alerts
+  - Maintains KOL rankings
+
+### Event System
+- **Event Emitter**: Facilitates loose coupling between components
+  - Handles price updates
+  - Manages wallet activity notifications
+  - Routes alert triggers
+  - Coordinates worker communication
+
+### Error Handling & Recovery
+- Comprehensive error handling across all layers
+- Automatic worker recovery
+- Graceful degradation
+- Detailed error logging
+
 ## 🚀 Overview
 
 This Telegram bot provides real-time insights and alerts based on data from the Vybe API, focusing on Solana Key Opinion Leaders (KOLs) and token price movements. It allows users to track top traders, monitor their wallets, and set custom price alerts for specific tokens.
@@ -18,6 +67,23 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   **Real-time Data:** Leverages the Vybe API for up-to-date KOL and token information.
 *   **Notifications:** Sends alerts directly to users via Telegram for tracked events (price movements, KOL trades, KOL ranking changes).
 *   **Automated Insights:** Can generate automated price chart snapshots and KOL activity summaries.
+
+## Automated Broadcasts
+
+The bot automatically sends two types of broadcasts to all users:
+
+1. **Price Board** (Every 4 hours)
+   - Shows current prices of tracked tokens
+   - Includes price changes and trends
+   - Sent as an image for better readability
+
+2. **Market Digest** (Every 12 hours)
+   - Comprehensive market overview
+   - Top performing tokens
+   - Trading volume analysis
+   - Sent as a formatted message
+
+Broadcasts start from server initialization time and continue on their respective intervals.
 
 ## 🔧 Setup & Installation
 
@@ -69,7 +135,6 @@ This Telegram bot provides real-time insights and alerts based on data from the 
 *   `/unsubscribe_kol_updates`: Opts out of receiving periodic KOL ranking change notifications.
 
 ### Token Price Alerts
-*   `/track_token`: Initiates tracking a token (enter symbol or address when prompted) for significant price movement alerts.
 *   `/set_alert`: Initiates setting a specific price target alert for a token (enter symbol/address and then target price when prompted).
 *   `/my_alerts`: Displays your currently active price target alerts with their status and IDs.
 *   `/remove_alert`: Initiates removing a specific price target alert (enter the alert ID when prompted).

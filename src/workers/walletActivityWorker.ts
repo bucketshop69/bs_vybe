@@ -1,6 +1,4 @@
 import { parentPort } from 'worker_threads';
-import { checkWalletActivity } from '../pollingService';
-import cron from 'node-cron';
 
 // Ensure we have the parent port
 if (!parentPort) {
@@ -66,7 +64,6 @@ const dbProxy = {
 
 // Track service state
 let isServiceRunning = false;
-let cronJob: cron.ScheduledTask | null = null;
 
 // Handle database responses
 port.on('message', (message) => {
@@ -85,91 +82,16 @@ function forwardWalletActivity(walletAddress: string, activity: any) {
     });
 }
 
-// Start polling for wallet activity
-async function startPolling() {
-    // Initialize by checking all wallets immediately
-    // console.log('Worker: Performing initial wallet activity check...');
-    await checkWalletActivity(dbProxy);
-
-    // Setup cron job to check wallet activity periodically
-    cronJob = cron.schedule('*/5 * * * *', async () => { // Every 5 minutes
-        // console.log('Worker: Checking wallet activity (scheduled)...');
-        try {
-            await checkWalletActivity(dbProxy);
-        } catch (error) {
-            // console.error('Worker: Error in scheduled wallet check:', error);
-        }
-    });
-
-    // console.log('Worker: Wallet activity polling service started');
-}
-
-// Stop polling for wallet activity
-function stopPolling() {
-    if (cronJob) {
-        cronJob.stop();
-        cronJob = null;
-    }
-
-    isServiceRunning = false;
-    // console.log('Worker: Wallet activity polling service stopped');
-}
-
 // Handle messages from the main thread
 port.on('message', async (message) => {
     try {
         switch (message.type) {
-            case 'START_POLLING':
-                // console.log('Worker: Starting wallet activity polling...');
-                // Mark as running and send response immediately to avoid timeout
-                isServiceRunning = true;
-                port.postMessage({
-                    type: 'POLLING_STARTED',
-                    timestamp: Date.now()
-                });
-
-                // Then perform the initial check (which might take time)
-                startPolling().catch(error => {
-                    // console.error('Worker: Error starting polling:', error);
-                    port.postMessage({
-                        type: 'ERROR',
-                        error: String(error),
-                        timestamp: Date.now()
-                    });
-                });
-                break;
-
-            case 'STOP_POLLING':
-                // console.log('Worker: Stopping wallet activity polling...');
-                stopPolling();
-                port.postMessage({
-                    type: 'POLLING_STOPPED',
-                    timestamp: Date.now()
-                });
-                break;
-
-            case 'CHECK_WALLET':
-                // console.log(`Worker: Checking specific wallet: ${message.walletAddress}`);
-                try {
-                    await checkWalletActivity(dbProxy, message.walletAddress);
-                    port.postMessage({
-                        type: 'WALLET_CHECKED',
-                        walletAddress: message.walletAddress,
-                        timestamp: Date.now()
-                    });
-                } catch (error: any) {
-                    port.postMessage({
-                        type: 'WALLET_CHECK_ERROR',
-                        walletAddress: message.walletAddress,
-                        error: error.message,
-                        timestamp: Date.now()
-                    });
-                }
+            case 'DB_RESPONSE':
+                dbProxy.handleResponse(message);
                 break;
 
             case 'SHUTDOWN':
-                // console.log('Worker: Shutting down wallet activity service...');
-                stopPolling();
+                isServiceRunning = false;
                 port.postMessage({
                     type: 'SHUTDOWN_COMPLETE',
                     timestamp: Date.now()
@@ -177,13 +99,12 @@ port.on('message', async (message) => {
                 break;
 
             default:
-                // Skip DB_RESPONSE messages as they're handled separately
                 if (message.type !== 'DB_RESPONSE') {
-                    // console.warn(`Worker: Unknown message type: ${message.type}`);
+                    console.warn(`Worker: Unknown message type: ${message.type}`);
                 }
         }
     } catch (error: any) {
-        // console.error('Worker: Error processing message:', error);
+        console.error('Worker: Error processing message:', error);
         port.postMessage({
             type: 'ERROR',
             error: error.message,
@@ -195,7 +116,7 @@ port.on('message', async (message) => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-    // console.error('Worker: Uncaught exception:', error);
+    console.error('Worker: Uncaught exception:', error);
     port.postMessage({
         type: 'UNCAUGHT_EXCEPTION',
         error: error.message,
@@ -204,11 +125,13 @@ process.on('uncaughtException', (error: Error) => {
     });
 });
 
-// Let the main thread know we're ready
-port.postMessage({
-    type: 'WORKER_READY',
-    workerType: 'wallet_activity',
-    timestamp: Date.now()
-});
+// Send ready message when worker starts
+port.postMessage({ type: 'WORKER_READY', timestamp: Date.now() });
+
+// Initial check (Optional - can be removed if CHECK_WALLET is the only entry point)
+// console.log('Worker: Performing initial wallet activity check on startup...');
+// checkWalletActivity(dbProxy).catch(error => {
+//     console.error('Worker: Error during initial wallet check:', error);
+// });
 
 // console.log('Wallet activity worker started and ready to receive messages'); 
