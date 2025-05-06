@@ -2,6 +2,55 @@
 
 **Access the live bot here:** [https://t.me/bs_vybe_bot](https://t.me/bs_vybe_bot)
 
+## 🏛️ Core Architecture
+
+The bot is built with a robust, scalable architecture that leverages worker threads for parallel processing and real-time data handling. Here's the core architecture:
+
+### Worker Thread System
+- **WorkerManager**: Central orchestrator managing multiple worker threads
+  - Handles worker lifecycle (start, stop, restart)
+  - Manages inter-worker communication
+  - Implements automatic recovery on failures
+  - Supports different worker types:
+    - Telegram Bot Worker
+    - Token Price Worker
+    - Wallet Activity Worker
+    - Alert Processing Worker
+
+### Real-time Data Processing
+- **VybeWebSocket Service**: Handles real-time data streams
+  - Manages WebSocket connections with automatic reconnection
+  - Implements filter-based data subscription
+  - Handles message routing to appropriate handlers
+  - Supports multiple data types (transfers, trades, prices)
+
+### Price Alert System
+- **Token Price Service**: Manages token price monitoring
+  - Implements smart polling with exponential backoff
+  - Maintains price history for trend analysis
+  - Handles price target detection
+  - Manages alert distribution
+
+### Database Layer
+- **Database Service**: Centralized data management
+  - Handles user subscriptions
+  - Manages tracked wallets
+  - Stores price alerts
+  - Maintains KOL rankings
+
+### Event System
+- **Event Emitter**: Facilitates loose coupling between components
+  - Handles price updates
+  - Manages wallet activity notifications
+  - Routes alert triggers
+  - Coordinates worker communication
+
+### Error Handling & Recovery
+- Comprehensive error handling across all layers
+- Automatic worker recovery
+- Graceful degradation
+- Detailed error logging
+
 ## 🚀 Overview
 
 This Telegram bot provides real-time insights and alerts based on data from the Vybe API, focusing on Solana Key Opinion Leaders (KOLs) and token price movements. It allows users to track top traders, monitor their wallets, and set custom price alerts for specific tokens.
