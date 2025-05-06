@@ -1,7 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { DEX_PROGRAMS, TRACKED_TOKENS } from './config';
-import { TokenPrice } from './database';
+import { TokenPrice } from './db/database';
 
 // Load environment variables
 dotenv.config();

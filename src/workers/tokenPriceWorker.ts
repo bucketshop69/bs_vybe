@@ -5,7 +5,7 @@ import {
     registerAlertCallback,
     registerPriceUpdateCallback,
     stopTokenPriceService
-} from '../tokenPriceService';
+} from '../services/tokenPriceService';
 
 // Ensure we have the parent port
 if (!parentPort) {

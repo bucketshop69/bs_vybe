@@ -1,7 +1,7 @@
-import { getActiveKOLAccounts, KnownAccount } from './vybeApi';
-import { getPreviousTopKols, updatePreviousTopKols } from './database';
-import { broadcastKOLUpdates, KOLChangeData } from './telegram'; // Assuming broadcastKOLUpdates and KOLChangeData are exported from telegram.ts
-import { bot } from './telegram'; // Import bot for potential direct use later if needed
+import { getActiveKOLAccounts } from '../vybeApi';
+import { getPreviousTopKols, updatePreviousTopKols } from '../db/database';
+import { broadcastKOLUpdates, KOLChangeData } from '../telegram'; // Assuming broadcastKOLUpdates and KOLChangeData are exported from telegram.ts
+import { bot } from '../telegram'; // Import bot for potential direct use later if needed
 
 const KOL_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour
 const TOP_N_KOLS = 10; // How many KOLs to track for changes

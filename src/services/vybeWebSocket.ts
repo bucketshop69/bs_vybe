@@ -3,9 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config(); // Ensure environment variables are loaded
 
-// --- Type Definitions (Phase 1.5) ---
 
-// Basic filter structure - will be expanded in Phase 2
 interface VybeBaseFilter {
     // Define common filter properties if any, or leave empty
 }

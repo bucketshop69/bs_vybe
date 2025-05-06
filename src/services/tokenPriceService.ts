@@ -1,14 +1,13 @@
-import { getAllTrackedTokenPrices, getTokenPrice, calculatePriceChangePercent } from './vybeApi';
+import { getAllTrackedTokenPrices, getTokenPrice, calculatePriceChangePercent } from '../vybeApi';
 import {
     TokenPrice,
     initializeTokenPriceCache,
     getAllTokenPrices,
-    getAllUserIds,
     getActiveAlertsForToken,
     markAlertAsTriggered,
-    UserPriceAlert
-} from './database';
-import { PRICE_ALERT_CONFIG } from './config';
+    UserPriceAlert,
+} from '../db/database';
+import { PRICE_ALERT_CONFIG } from '../config';
 
 // Global variables for service state
 let isPolling = false;
@@ -319,7 +318,7 @@ export async function pollTokenPrices(db: any): Promise<boolean> {
         const previousPrices: { [key: string]: number } = {};
 
         // Create a map for easy lookup
-        previousTokenPrices.forEach(token => {
+        previousTokenPrices.forEach((token: TokenPrice) => {
             previousPrices[token.mint_address] = token.current_price;
         });
 
@@ -499,7 +498,7 @@ export async function simulatePriceChange(
     try {
         // Get current token
         const tokens = await getAllTokenPrices(db);
-        const token = tokens.find(t => t.mint_address === mintAddress);
+        const token = tokens.find((t: TokenPrice) => t.mint_address === mintAddress);
         if (!token) {
             return false;
         }

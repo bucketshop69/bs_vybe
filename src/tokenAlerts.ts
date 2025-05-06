@@ -1,6 +1,6 @@
 import { bot } from './telegram';
-import { TokenPrice, UserPriceAlert } from './database';
-import { PriceAlertCallback, registerAlertCallback } from './tokenPriceService';
+import { TokenPrice, UserPriceAlert } from './db/database';
+import { PriceAlertCallback, registerAlertCallback } from './services/tokenPriceService';
 import { PRICE_ALERT_CONFIG } from './config';
 import { userLog } from './logger';
 

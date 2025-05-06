@@ -1,10 +1,10 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
-import { walletLog } from './logger';
-import { TRACKED_TOKENS, PRICE_ALERT_CONFIG } from './config';
+import { walletLog } from '../logger';
+import { PRICE_ALERT_CONFIG } from '../config';
 import fs from 'fs';
 import path from 'path';
-import { KnownAccount } from './vybeApi'; // Import KnownAccount type
+import { KnownAccount } from '../vybeApi'; // Import KnownAccount type
 
 // Token price interfaces
 export interface TokenPrice {

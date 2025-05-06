@@ -1,35 +1,10 @@
 import { VybeTransfer } from '../vybeApi'; // Assuming VybeTransfer is exported and useful
-import { getAllTrackedWalletsWithState, updateLastNotifiedSignature /* , potentially new state update functions */ } from '../database';
-import { walletLog, logTransferNotification } from '../logger';
+import { getAllTrackedWalletsWithState, updateLastNotifiedSignature /* , potentially new state update functions */ } from '../db/database';
+import { walletLog } from '../logger';
 import { SPAM_ADDRESSES } from '../constants';
-import WorkerManager, { WorkerType } from '../workerManager'; // To send messages to Telegram worker
+import WorkerManager, { WorkerType } from '../workers/workerManager'; // To send messages to Telegram worker
 
-// Define expected structure for incoming WebSocket messages (adjust as needed)
-// Based on Vybe docs or observed messages
-interface WebSocketTransferMessage {
-    type: 'transfer'; // Or whatever Vybe uses
-    data: VybeTransfer & { /* any additional fields from WS */ };
-    // Add other potential message types like 'trade', 'price'
-}
 
-// Store the last processed block time per user/wallet combo to prevent duplicates
-// In-memory cache for simplicity, could be moved to DB for persistence across restarts
-const lastProcessedBlockTimeCache: { [userWalletKey: string]: number } = {};
-
-// Define the structure returned by getAllTrackedWalletsWithState
-interface TrackedWalletState {
-    user_id: number;
-    wallet_address: string;
-    last_notified_tx_signature: string | null;
-    last_processed_block_time: number | null;
-    tracking_started_at: number | null;
-    created_at: string; // Assuming it's a string from the DB
-    // Add other fields if returned by the query
-}
-
-function getUserWalletKey(userId: number, walletAddress: string): string {
-    return `${userId}:${walletAddress}`;
-}
 
 class WalletActivityHandler {
     private db: any;

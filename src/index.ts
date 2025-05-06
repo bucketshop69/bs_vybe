@@ -1,13 +1,13 @@
 import 'dotenv/config';
-import { initializeDatabase } from './database';
-import WorkerManager, { WorkerType, WorkerManagerEvent } from './workerManager';
-import { startKolRankingService } from './kolRankingService';
+import { initializeDatabase } from './db/database';
+import WorkerManager, { WorkerType, WorkerManagerEvent } from './workers/workerManager';
 import { vybeWebSocketService } from './services/vybeWebSocket';
 import { generateCurrentFilters } from './filterService';
 import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
 import WalletActivityHandler from './services/walletActivityHandler';
 import { startScheduler } from './scheduler';
 import { bot } from './telegram';
+import { startKolRankingService } from './services/kolRankingService';
 
 // --- WebSocket Filter Update Handler ---
 // Debounce state for filter updates

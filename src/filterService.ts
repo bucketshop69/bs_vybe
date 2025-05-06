@@ -1,13 +1,7 @@
+import { getAllTrackedWalletsWithState } from './db/database';
 import { VybeWebSocketFilters, VybeTransferFilter, VybeTradeFilter, VybeOraclePriceFilter } from './services/vybeWebSocket';
-import { getAllTrackedWalletsWithState } from './database';
-// import { getAllTrackedWalletsWithState, getMintAddressesWithActiveAlerts } from './database'; // Assuming this function exists and works with the proxy
-// import { /* other DB functions like getTokensFromAlerts */ } from './database';
 
-/**
- * Generates the complete set of WebSocket filters based on the current database state.
- * @param db - The database connection or proxy.
- * @returns A promise resolving to the VybeWebSocketFilters object.
- */
+
 export async function generateCurrentFilters(db: any): Promise<VybeWebSocketFilters> {
     console.log('[FilterService] Generating current WebSocket filters...');
 
@@ -22,15 +16,10 @@ export async function generateCurrentFilters(db: any): Promise<VybeWebSocketFilt
         ]);
         console.log(`[FilterService] Generated ${transferFilters.length} transfer filters for ${uniqueWallets.length} unique wallets.`);
 
-        // --- Trade Filters (Optional - Placeholder) ---
-        // TODO: Implement logic if trade tracking is desired (e.g., fetch KOLs)
+
         const tradeFilters: VybeTradeFilter[] = []; // Default to empty with correct type
         console.log(`[FilterService] Trade filters are currently not implemented.`);
 
-        // --- Oracle Price Filters (Reverted - Placeholder) ---
-        // const priceAlertMints = await getMintAddressesWithActiveAlerts(db);
-        // let oraclePriceFilters: VybeOraclePriceFilter[] = [];
-        // if (priceAlertMints.length > 0) { ... }
         const oraclePriceFilters: VybeOraclePriceFilter[] = []; // Default to empty
         console.log(`[FilterService] Oracle price filters are currently not implemented.`);
 

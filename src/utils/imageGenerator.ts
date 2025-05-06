@@ -2,7 +2,7 @@
 import { createCanvas, loadImage, registerFont, CanvasRenderingContext2D, Image as CanvasImage, Canvas } from 'canvas';
 import * as path from 'path'; // Use import for path
 import * as fs from 'fs'; // Add fs import
-import { TokenDetails, getAllTrackedTokenPrices, getTokenPrices } from '../vybeApi';
+import { TokenDetails, getTokenPrices } from '../vybeApi';
 import { TRACKED_TOKENS } from '../config';
 
 // Register Montserrat font if available

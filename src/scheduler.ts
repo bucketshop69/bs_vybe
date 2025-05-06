@@ -1,11 +1,8 @@
 import { bot } from './telegram';
 import { generatePriceBoardImage } from './utils/imageGenerator';
 import { getRankedDexData, formatDigestMessage } from './vybeApi';
-import { getAllUserIds } from './database';
-
-const FOUR_HOURS = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
-const TWELVE_HOURS = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
-const SEND_DELAY = 150; // ms between sends
+import { getAllUserIds } from './db/database';
+import { FOUR_HOURS, TWELVE_HOURS, SEND_DELAY } from './config';
 
 /**
  * Sends the price board image to all users
@@ -95,8 +92,6 @@ export function startScheduler(db: any, bot: any) {
 
     // Calculate next run times based on current time
     const now = Date.now();
-    const FOUR_HOURS = 4 * 60 * 60 * 1000;
-    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 
     // Calculate next run times
     const nextPriceBoard = now + FOUR_HOURS;

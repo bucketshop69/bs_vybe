@@ -60,6 +60,10 @@ export const PRICE_ALERT_CONFIG = {
     tooFarThresholdPercent: 10              // Target more than 10% from current price is too far
 };
 
+// Time constants in milliseconds
+export const FOUR_HOURS = 4 * 60 * 60 * 1000;
+export const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+export const SEND_DELAY = 150; // ms between sends
 
 export const KOLs_wallets = {
     "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o": "Cented7",

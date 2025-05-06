@@ -1,6 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 import dotenv from 'dotenv';
-import { getRankedDexData, formatDigestMessage, getTokenBySymbolOrAddress, getActiveKOLAccounts, type KOLAccountWithPnL, getKOLAccounts, type KnownAccount } from './vybeApi';
+import {
+    getTokenBySymbolOrAddress, getActiveKOLAccounts,
+    type KOLAccountWithPnL, getKOLAccounts,
+} from './vybeApi';
 import {
     addTrackedWallet,
     getUserTrackedWallets,
@@ -12,13 +15,14 @@ import {
     addKolUnsubscription,
     getAllUserIds,
     getKolUnsubscribedUserIds,
-} from './database';
-import { getTokenPriceChange } from './tokenPriceService';
+} from './db/database';
+
 import { PRICE_ALERT_CONFIG } from './config';
 import { estimateTimeToTarget, formatTimeEstimate, validatePriceTarget } from './tokenAlerts';
 import { generatePriceBoardImage } from './utils/imageGenerator';
 import { appEvents, EVENT_TRACKED_WALLETS_CHANGED } from './appEvents';
 import { VybeTransfer } from './vybeApi';
+import { getTokenPriceChange } from './services/tokenPriceService';
 
 dotenv.config();
 
